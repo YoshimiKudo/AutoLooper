@@ -9,7 +9,7 @@ AutoLooper は、ゲーム音楽向けのループマーカー検出・編集デ
 最新版は GitHub Releases から取得できます。
 
 - **アプリ本体をダウンロード**: [AutoLooper.0.1.0.exe](https://github.com/YoshimiKudo/AutoLooper/releases/download/v0.1.0-beta/AutoLooper.0.1.0.exe)
-- **紹介動画を見る / ダウンロード**: [AutoLooper_feature_intro_v0.1.0-beta.mp4](https://github.com/YoshimiKudo/AutoLooper/releases/download/v0.1.0-beta/AutoLooper_feature_intro_v0.1.0-beta.mp4)
+- **紹介動画を見る**: [X の投稿で再生](https://x.com/yoshimikudo/status/2061571506950599070)
 - **チェックサム**: [SHA256SUMS.txt](https://github.com/YoshimiKudo/AutoLooper/releases/download/v0.1.0-beta/SHA256SUMS.txt)
 - **リリースページ**: [AutoLooper v0.1.0-beta](https://github.com/YoshimiKudo/AutoLooper/releases/tag/v0.1.0-beta)
 
@@ -17,9 +17,9 @@ AutoLooper は、ゲーム音楽向けのループマーカー検出・編集デ
 
 ### 紹介動画
 
-[![AutoLooper 紹介動画](docs/autolooper-video-thumbnail.png)](https://github.com/YoshimiKudo/AutoLooper/releases/download/v0.1.0-beta/AutoLooper_feature_intro_v0.1.0-beta.mp4)
+[![AutoLooper 紹介動画](docs/autolooper-video-thumbnail.png)](https://x.com/yoshimikudo/status/2061571506950599070)
 
-画像をクリックすると紹介動画を開きます。
+画像をクリックすると X の投稿で紹介動画を再生できます。
 
 ### 対応環境
 
@@ -139,7 +139,7 @@ AutoLooper is a desktop app for detecting and editing loop markers in game music
 The latest build is available from GitHub Releases.
 
 - **Download the app**: [AutoLooper.0.1.0.exe](https://github.com/YoshimiKudo/AutoLooper/releases/download/v0.1.0-beta/AutoLooper.0.1.0.exe)
-- **Watch / download the intro video**: [AutoLooper_feature_intro_v0.1.0-beta.mp4](https://github.com/YoshimiKudo/AutoLooper/releases/download/v0.1.0-beta/AutoLooper_feature_intro_v0.1.0-beta.mp4)
+- **Watch the intro video**: [Play it on X](https://x.com/yoshimikudo/status/2061571506950599070)
 - **Checksum**: [SHA256SUMS.txt](https://github.com/YoshimiKudo/AutoLooper/releases/download/v0.1.0-beta/SHA256SUMS.txt)
 - **Release page**: [AutoLooper v0.1.0-beta](https://github.com/YoshimiKudo/AutoLooper/releases/tag/v0.1.0-beta)
 
@@ -147,9 +147,9 @@ The latest build is available from GitHub Releases.
 
 ### Feature Intro Video
 
-[![AutoLooper feature intro video](docs/autolooper-video-thumbnail.png)](https://github.com/YoshimiKudo/AutoLooper/releases/download/v0.1.0-beta/AutoLooper_feature_intro_v0.1.0-beta.mp4)
+[![AutoLooper feature intro video](docs/autolooper-video-thumbnail.png)](https://x.com/yoshimikudo/status/2061571506950599070)
 
-Click the thumbnail to open the intro video.
+Click the thumbnail to play the intro video on X.
 
 ### Supported Environment
 
