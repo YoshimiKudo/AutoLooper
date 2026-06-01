@@ -15,6 +15,12 @@ AutoLooper は、ゲーム音楽向けのループマーカー検出・編集デ
 
 `SHA256SUMS.txt` は、ダウンロードした exe がリリース時のファイルと一致するか確認するためのファイルです。
 
+### 紹介動画
+
+[![AutoLooper 紹介動画](docs/autolooper-video-thumbnail.png)](https://github.com/YoshimiKudo/AutoLooper/releases/download/v0.1.0-beta/AutoLooper_feature_intro_v0.1.0-beta.mp4)
+
+画像をクリックすると紹介動画を開きます。
+
 ### 対応環境
 
 - Windows
@@ -138,6 +144,12 @@ The latest build is available from GitHub Releases.
 - **Release page**: [AutoLooper v0.1.0-beta](https://github.com/YoshimiKudo/AutoLooper/releases/tag/v0.1.0-beta)
 
 `SHA256SUMS.txt` is provided to verify that the downloaded exe matches the release artifact.
+
+### Feature Intro Video
+
+[![AutoLooper feature intro video](docs/autolooper-video-thumbnail.png)](https://github.com/YoshimiKudo/AutoLooper/releases/download/v0.1.0-beta/AutoLooper_feature_intro_v0.1.0-beta.mp4)
+
+Click the thumbnail to open the intro video.
 
 ### Supported Environment
 
