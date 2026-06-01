@@ -10,6 +10,7 @@ AutoLooper は、ゲーム音楽向けのループマーカー検出・編集デ
 
 - Release: https://github.com/YoshimiKudo/AutoLooper/releases
 - Windows portable exe: `AutoLooper.0.1.0.exe`
+- 紹介動画: https://github.com/YoshimiKudo/AutoLooper/releases/download/v0.1.0-beta/AutoLooper_feature_intro_v0.1.0-beta.mp4
 - `SHA256SUMS.txt`: ダウンロードした exe がリリース時のファイルと一致するか確認するためのチェックサム
 
 ### 対応環境
@@ -117,6 +118,7 @@ The latest build is distributed through GitHub Releases.
 
 - Release: https://github.com/YoshimiKudo/AutoLooper/releases
 - Windows portable exe: `AutoLooper.0.1.0.exe`
+- Feature intro video: https://github.com/YoshimiKudo/AutoLooper/releases/download/v0.1.0-beta/AutoLooper_feature_intro_v0.1.0-beta.mp4
 - `SHA256SUMS.txt`: Checksum file for verifying that the downloaded exe matches the release artifact
 
 ### Supported Environment
