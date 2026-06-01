@@ -4,6 +4,20 @@
 
 AutoLooper は、ゲーム音楽向けのループマーカー検出・編集デスクトップアプリです。WAV、AIFF、Ogg Vorbis ファイルを読み込み、最良のループ候補を自動採用し、波形表示とリストエディタの両方で確認・編集できます。
 
+### ダウンロード
+
+最新版は GitHub Releases から取得します。
+
+- Release: https://github.com/YoshimiKudo/AutoLooper/releases
+- Windows portable exe: `AutoLooper.0.1.0.exe`
+- `SHA256SUMS.txt`: ダウンロードした exe がリリース時のファイルと一致するか確認するためのチェックサム
+
+### 対応環境
+
+- Windows
+- macOS は将来対応予定
+- 現在の exe はコード署名されていません。Windows SmartScreen の警告が表示される場合があります。
+
 ### 主な機能
 
 - `.wav`、`.aif`、`.aiff`、`.ogg` の読み込み
@@ -81,11 +95,35 @@ npm.cmd run dist
 - 現在の開発・検証環境は Windows です。macOS 対応は将来想定です。
 - 現在の exe はコード署名されていません。
 
+### サポートと連絡先
+
+- バグ報告や改善要望は GitHub Issues を使う想定です。
+- 公式サイト: https://yoshimi-kudo.com/
+- X: https://x.com/yoshimikudo
+
+### ライセンス
+
+ライセンス方針は未確定です。Public 公開する場合は、再利用を許可する範囲に応じて LICENSE ファイルを追加してください。
+
 ---
 
 ## English
 
 AutoLooper is a desktop app for detecting and editing loop markers in game music files. It imports WAV, AIFF, and Ogg Vorbis files, automatically adopts the best loop candidate, and lets you review and edit loop points in both waveform and list editor views.
+
+### Download
+
+The latest build is distributed through GitHub Releases.
+
+- Release: https://github.com/YoshimiKudo/AutoLooper/releases
+- Windows portable exe: `AutoLooper.0.1.0.exe`
+- `SHA256SUMS.txt`: Checksum file for verifying that the downloaded exe matches the release artifact
+
+### Supported Environment
+
+- Windows
+- macOS support is planned for a future release
+- The current exe is not code-signed, so Windows SmartScreen may show a warning.
 
 ### Features
 
@@ -163,3 +201,13 @@ Build outputs are written to the `release` folder.
 - Invalid loop length input sets the track status to warning and shows the reason in the validation column.
 - macOS support is planned for the future. Current development and verification are on Windows.
 - The current exe is not code-signed.
+
+### Support and Contact
+
+- Bug reports and feature requests are expected to be handled through GitHub Issues.
+- Official website: https://yoshimi-kudo.com/
+- X: https://x.com/yoshimikudo
+
+### License
+
+The license policy has not been decided yet. Add a LICENSE file before making the repository public if reuse terms need to be clear.
