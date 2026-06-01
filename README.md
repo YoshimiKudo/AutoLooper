@@ -6,12 +6,14 @@ AutoLooper は、ゲーム音楽向けのループマーカー検出・編集デ
 
 ### ダウンロード
 
-最新版は GitHub Releases から取得します。
+最新版は GitHub Releases から取得できます。
 
-- Release: https://github.com/YoshimiKudo/AutoLooper/releases
-- Windows portable exe: `AutoLooper.0.1.0.exe`
-- 紹介動画: https://github.com/YoshimiKudo/AutoLooper/releases/download/v0.1.0-beta/AutoLooper_feature_intro_v0.1.0-beta.mp4
-- `SHA256SUMS.txt`: ダウンロードした exe がリリース時のファイルと一致するか確認するためのチェックサム
+- **アプリ本体をダウンロード**: [AutoLooper.0.1.0.exe](https://github.com/YoshimiKudo/AutoLooper/releases/download/v0.1.0-beta/AutoLooper.0.1.0.exe)
+- **紹介動画を見る / ダウンロード**: [AutoLooper_feature_intro_v0.1.0-beta.mp4](https://github.com/YoshimiKudo/AutoLooper/releases/download/v0.1.0-beta/AutoLooper_feature_intro_v0.1.0-beta.mp4)
+- **チェックサム**: [SHA256SUMS.txt](https://github.com/YoshimiKudo/AutoLooper/releases/download/v0.1.0-beta/SHA256SUMS.txt)
+- **リリースページ**: [AutoLooper v0.1.0-beta](https://github.com/YoshimiKudo/AutoLooper/releases/tag/v0.1.0-beta)
+
+`SHA256SUMS.txt` は、ダウンロードした exe がリリース時のファイルと一致するか確認するためのファイルです。
 
 ### 対応環境
 
@@ -128,12 +130,14 @@ AutoLooper is a desktop app for detecting and editing loop markers in game music
 
 ### Download
 
-The latest build is distributed through GitHub Releases.
+The latest build is available from GitHub Releases.
 
-- Release: https://github.com/YoshimiKudo/AutoLooper/releases
-- Windows portable exe: `AutoLooper.0.1.0.exe`
-- Feature intro video: https://github.com/YoshimiKudo/AutoLooper/releases/download/v0.1.0-beta/AutoLooper_feature_intro_v0.1.0-beta.mp4
-- `SHA256SUMS.txt`: Checksum file for verifying that the downloaded exe matches the release artifact
+- **Download the app**: [AutoLooper.0.1.0.exe](https://github.com/YoshimiKudo/AutoLooper/releases/download/v0.1.0-beta/AutoLooper.0.1.0.exe)
+- **Watch / download the intro video**: [AutoLooper_feature_intro_v0.1.0-beta.mp4](https://github.com/YoshimiKudo/AutoLooper/releases/download/v0.1.0-beta/AutoLooper_feature_intro_v0.1.0-beta.mp4)
+- **Checksum**: [SHA256SUMS.txt](https://github.com/YoshimiKudo/AutoLooper/releases/download/v0.1.0-beta/SHA256SUMS.txt)
+- **Release page**: [AutoLooper v0.1.0-beta](https://github.com/YoshimiKudo/AutoLooper/releases/tag/v0.1.0-beta)
+
+`SHA256SUMS.txt` is provided to verify that the downloaded exe matches the release artifact.
 
 ### Supported Environment
 
