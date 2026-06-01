@@ -19,6 +19,19 @@ AutoLooper は、ゲーム音楽向けのループマーカー検出・編集デ
 - macOS は将来対応予定
 - 現在の exe はコード署名されていません。Windows SmartScreen の警告が表示される場合があります。
 
+### Windows SmartScreen について
+
+現在のベータ版 exe はコード署名されていないため、初回起動時に Windows Defender SmartScreen の「Windows によって PC が保護されました」または「不明な発行元」の警告が出る場合があります。
+
+公式配布元は GitHub Releases のみです。ダウンロード元がこのリポジトリの Release であることを確認し、必要に応じて `SHA256SUMS.txt` でファイルの一致を確認してください。
+
+警告画面から起動する場合:
+
+1. `詳細情報` を選択
+2. `実行` を選択
+
+会社PCや Smart App Control が有効な環境では、組織のセキュリティ設定により実行できない場合があります。
+
 ### 主な機能
 
 - `.wav`、`.aif`、`.aiff`、`.ogg` の読み込み
@@ -95,6 +108,7 @@ npm.cmd run dist
 - ループ長などに無効な値を入力すると、トラック状態が警告になり、検証欄に理由が表示されます。
 - 現在の開発・検証環境は Windows です。macOS 対応は将来想定です。
 - 現在の exe はコード署名されていません。
+- SmartScreen 警告が出た場合は、公式 Release から取得したファイルであることを確認し、必要に応じて `詳細情報` から実行してください。
 
 ### サポートと連絡先
 
@@ -126,6 +140,19 @@ The latest build is distributed through GitHub Releases.
 - Windows
 - macOS support is planned for a future release
 - The current exe is not code-signed, so Windows SmartScreen may show a warning.
+
+### Windows SmartScreen
+
+The current beta executable is not code-signed. On first launch, Windows Defender SmartScreen may show a warning such as "Windows protected your PC" or "Unknown publisher".
+
+The official distribution source is GitHub Releases only. Confirm that the file was downloaded from this repository's Release page, and use `SHA256SUMS.txt` if you want to verify that the file matches the release artifact.
+
+If you choose to run it from the SmartScreen warning:
+
+1. Select `More info`
+2. Select `Run anyway`
+
+On company-managed PCs or environments with Smart App Control enabled, organization security policy may prevent the app from running.
 
 ### Features
 
@@ -203,6 +230,7 @@ Build outputs are written to the `release` folder.
 - Invalid loop length input sets the track status to warning and shows the reason in the validation column.
 - macOS support is planned for the future. Current development and verification are on Windows.
 - The current exe is not code-signed.
+- If SmartScreen shows a warning, verify that the file came from the official Release page and use `More info` if you choose to run it.
 
 ### Support and Contact
 
