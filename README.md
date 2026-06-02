@@ -1,5 +1,13 @@
 # AutoLooper
 
+## Download / ダウンロード
+
+**Windows版アプリ本体:** [AutoLooper.0.2.0.exe](https://github.com/YoshimiKudo/AutoLooper/releases/download/v0.2.0-beta/AutoLooper.0.2.0.exe)
+
+最新版のリリースページ: [AutoLooper Releases](https://github.com/YoshimiKudo/AutoLooper/releases)
+
+Download the latest Windows portable exe from the link above.
+
 ## 日本語
 
 AutoLooper は、ゲーム音楽向けのループマーカー検出・編集デスクトップアプリです。WAV、AIFF、Ogg Vorbis、MP3 ファイルを読み込み、最良のループ候補を自動採用し、波形表示とリストエディタの両方で確認・編集できます。
