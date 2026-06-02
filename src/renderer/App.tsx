@@ -71,8 +71,8 @@ interface TrackHistoryTransaction {
 }
 
 const defaultSettings: DetectionSettings = {
-  matchWindowMs: 3000,
-  matchThreshold: 95,
+  matchWindowMs: 1500,
+  matchThreshold: 88,
   minimumLoopMs: 3000,
   loopCheckPrerollMs: 1000
 };
@@ -428,7 +428,7 @@ export default function App(): React.ReactElement {
   const [activeTrackId, setActiveTrackId] = useState<string | null>(demoTracks[0]?.id ?? null);
   const [settings, setSettings] = useState(defaultSettings);
   const [savedCustomSettings, setSavedCustomSettings] = useState<DetectionSettings | null>(() => readSavedCustomPreset());
-  const [detectionPreset, setDetectionPreset] = useState<DetectionPreset>("high");
+  const [detectionPreset, setDetectionPreset] = useState<DetectionPreset>("mid");
   const [view, setView] = useState<ViewMode>("waveform");
   const [sortRules, setSortRules] = useState<SortRule[]>([{ key: "fileName", direction: "asc" }]);
   const [filter, setFilter] = useState("");
@@ -444,6 +444,7 @@ export default function App(): React.ReactElement {
   const [readmeError, setReadmeError] = useState<string | null>(null);
   const [detectionProgress, setDetectionProgress] = useState<DetectionProgress | null>(null);
   const [importProgress, setImportProgress] = useState<ImportProgress | null>(null);
+  const [waveformPreviewTrackId, setWaveformPreviewTrackId] = useState<string | null>(null);
   const playbackRef = useRef<PlaybackSession | null>(null);
   const playbackRequestRef = useRef(0);
   const checkboxSelectionDragRef = useRef<CheckboxSelectionDrag | null>(null);
@@ -454,7 +455,7 @@ export default function App(): React.ReactElement {
   const historyTransactionRef = useRef<TrackHistoryTransaction | null>(null);
   const [historyCounts, setHistoryCounts] = useState({ past: 0, future: 0 });
 
-  const selectedTrackId = detectionProgress?.currentTrackId ?? resolveActiveTrackId(activeTrackId, selectedIds, tracks);
+  const selectedTrackId = detectionProgress?.currentTrackId ?? waveformPreviewTrackId ?? resolveActiveTrackId(activeTrackId, selectedIds, tracks);
   const selectedTrack = tracks.find((track) => track.id === selectedTrackId) ?? null;
   const visibleTracks = useMemo(() => sortTracks(filterTracks(tracks, filter), sortRules), [tracks, filter, sortRules]);
   const selectedTracks = tracks.filter((track) => selectedIds.includes(track.id));
@@ -620,20 +621,26 @@ export default function App(): React.ReactElement {
   async function prepareWaveformPreviews(importedTracks: TrackInfo[]): Promise<void> {
     const targets = importedTracks.filter((track) => !track.waveform && usesWebAudioDetection(track.format));
     if (targets.length === 0) return;
-    setStatus(`${ui(language, "preparingWaveform")}: ${targets[0].fileName}`);
-    for (const track of targets) {
-      try {
-        const patch = await decodeTrackPreview(track);
-        setTracks((current) => current.map((item) => (item.id === track.id ? { ...item, ...patch } : item)));
-      } catch (error) {
-        const validation = error instanceof Error ? `${track.format.toUpperCase()} decode failed: ${error.message}` : `${track.format.toUpperCase()} decode failed.`;
-        setTracks((current) =>
-          current.map((item) => (item.id === track.id ? { ...item, status: "warning", validation } : item))
-        );
+    try {
+      for (const track of targets) {
+        setWaveformPreviewTrackId(track.id);
+        setStatus(`${ui(language, "preparingWaveform")}: ${track.fileName}`);
+        await waitForUiFrame();
+        try {
+          const patch = await decodeTrackPreview(track);
+          setTracks((current) => current.map((item) => (item.id === track.id ? { ...item, ...patch } : item)));
+        } catch (error) {
+          const validation = error instanceof Error ? `${track.format.toUpperCase()} decode failed: ${error.message}` : `${track.format.toUpperCase()} decode failed.`;
+          setTracks((current) =>
+            current.map((item) => (item.id === track.id ? { ...item, status: "warning", validation } : item))
+          );
+        }
+        await waitForUiFrame();
       }
-      await waitForUiFrame();
+      setStatus(`${ui(language, "waveformReady")}: ${targets.length}`);
+    } finally {
+      setWaveformPreviewTrackId(null);
     }
-    setStatus(`${ui(language, "waveformReady")}: ${targets.length}`);
   }
 
   function syncHistoryCounts(): void {
@@ -1332,6 +1339,7 @@ export default function App(): React.ReactElement {
           patchLoopLength={patchLoopLength}
           moveLoopRange={moveLoopRange}
           recordTrackHistory={recordTrackHistory}
+          currentScanningTrackId={detectionProgress?.currentTrackId ?? waveformPreviewTrackId}
           playingTrackId={playingTrackId}
           playbackKind={playbackKind}
           playhead={playhead}
@@ -1766,6 +1774,7 @@ function WaveformView(props: {
   patchLoopLength: (track: TrackInfo, value: number | null, invalidInput?: string) => void;
   moveLoopRange: (track: TrackInfo, startSample: number, recordHistory?: boolean) => void;
   recordTrackHistory: () => void;
+  currentScanningTrackId: string | null;
   playingTrackId: string | null;
   playbackKind: PlaybackKind | null;
   playhead: { trackId: string; sample: number } | null;
@@ -1796,6 +1805,7 @@ function WaveformView(props: {
     patchLoopLength,
     moveLoopRange,
     recordTrackHistory,
+    currentScanningTrackId,
     playingTrackId,
     playbackKind,
     playhead,
@@ -1840,6 +1850,7 @@ function WaveformView(props: {
               playheadSample={playhead?.trackId === selectedTrack.id ? playhead.sample : null}
               moveLoopRange={moveLoopRange}
               recordTrackHistory={recordTrackHistory}
+              isScanning={currentScanningTrackId === selectedTrack.id || selectedTrack.status === "processing"}
               language={language}
               displayUnit={displayUnit}
             />
@@ -1952,6 +1963,7 @@ function WaveformCanvas({
   playheadSample,
   moveLoopRange,
   recordTrackHistory,
+  isScanning,
   language,
   displayUnit
 }: {
@@ -1959,6 +1971,7 @@ function WaveformCanvas({
   playheadSample: number | null;
   moveLoopRange: (track: TrackInfo, startSample: number, recordHistory?: boolean) => void;
   recordTrackHistory: () => void;
+  isScanning: boolean;
   language: Language;
   displayUnit: DisplayUnit;
 }): React.ReactElement {
@@ -1973,7 +1986,6 @@ function WaveformCanvas({
   const startX = track.loop ? (track.loop.startSample / durationSamples) * width : null;
   const endX = track.loop ? (track.loop.endSample / durationSamples) * width : null;
   const playheadX = playheadSample === null ? null : (playheadSample / durationSamples) * width;
-  const isScanning = track.status === "processing";
 
   function sampleFromClientX(clientX: number): number {
     const bounds = svgRef.current?.getBoundingClientRect();
