@@ -6,8 +6,8 @@ AutoLooper は、ゲーム音楽向けのループマーカー検出・編集デ
 
 ### バージョン情報
 
-- アプリバージョン: `0.1.0`
-- リリースタグ: `v0.1.0-beta`
+- アプリバージョン: `0.2.0`
+- リリースタグ: `v0.2.0-beta`
 - リリース日: `2026-06-02` JST
 - リリース種別: ベータ / プレリリース
 - 現在の主な対象環境: Windows
@@ -110,8 +110,8 @@ AutoLooper is a desktop app for detecting and editing loop markers in game music
 
 ### Version
 
-- App version: `0.1.0`
-- Release tag: `v0.1.0-beta`
+- App version: `0.2.0`
+- Release tag: `v0.2.0-beta`
 - Release date: `2026-06-02` JST
 - Release type: beta / prerelease
 - Primary current target: Windows
