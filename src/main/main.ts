@@ -20,8 +20,8 @@ function createWindow(): void {
   const window = new BrowserWindow({
     width: 1540,
     height: 960,
-    minWidth: 1180,
-    minHeight: 760,
+    minWidth: 1480,
+    minHeight: 880,
     backgroundColor: "#091116",
     title: "AutoLooper",
     icon: appIconPath,

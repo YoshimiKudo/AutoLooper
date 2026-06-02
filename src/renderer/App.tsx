@@ -15,6 +15,7 @@ type DisplayUnit = "samples" | "time";
 
 interface PlaybackSession {
   source: AudioBufferSourceNode;
+  gain: GainNode;
   trackId: string;
   kind: PlaybackKind;
   sampleRate: number;
@@ -88,6 +89,7 @@ const defaultSaveOptions: SaveOptions = {
   outputDirectory: null,
   filenameSuffix: "_looped"
 };
+const playbackFadeMs = 24;
 const maxTrackHistoryEntries = 100;
 
 const uiText = {
@@ -589,11 +591,7 @@ export default function App(): React.ReactElement {
       if (!playback) return;
       playback.stoppedByUser = true;
       playback.source.onended = null;
-      try {
-        playback.source.stop();
-      } catch {
-        // AudioBufferSourceNode can only be stopped once.
-      }
+      stopPlaybackSource(playback, false);
       playbackRef.current = null;
     };
   }, []);
@@ -1013,16 +1011,29 @@ export default function App(): React.ReactElement {
     }
     playback.stoppedByUser = true;
     playback.source.onended = null;
-    try {
-      playback.source.stop();
-    } catch {
-      // AudioBufferSourceNode can only be stopped once.
-    }
+    stopPlaybackSource(playback, true);
     playbackRef.current = null;
     setPlayingTrackId(null);
     setPlaybackKind(null);
     setPlayhead(null);
     setStatus(nextStatus);
+  }
+
+  function stopPlaybackSource(playback: PlaybackSession, useFade: boolean): void {
+    try {
+      const fadeSeconds = useFade ? playbackFadeMs / 1000 : 0;
+      const now = audioContext?.currentTime ?? 0;
+      playback.gain.gain.cancelScheduledValues(now);
+      playback.gain.gain.setValueAtTime(Math.max(0.0001, playback.gain.gain.value || 1), now);
+      if (fadeSeconds > 0) {
+        playback.gain.gain.linearRampToValueAtTime(0.0001, now + fadeSeconds);
+        playback.source.stop(now + fadeSeconds);
+      } else {
+        playback.source.stop();
+      }
+    } catch {
+      // AudioBufferSourceNode can only be stopped once.
+    }
   }
 
   async function togglePlayback(track: TrackInfo): Promise<void> {
@@ -1063,6 +1074,45 @@ export default function App(): React.ReactElement {
     });
   }
 
+  async function movePlaybackTrack(direction: -1 | 1, orderedTracks: TrackInfo[]): Promise<void> {
+    if (!selectedTrack || orderedTracks.length === 0) return;
+    const currentIndex = orderedTracks.findIndex((track) => track.id === selectedTrack.id);
+    if (currentIndex < 0) return;
+    const nextTrack = orderedTracks[currentIndex + direction];
+    if (!nextTrack) return;
+
+    const currentPlaybackKind = playingTrackId === selectedTrack.id ? playbackKind : null;
+    focusWaveformTrack(nextTrack.id);
+
+    if (currentPlaybackKind === "track") {
+      await startPlayback(nextTrack, {
+        kind: "track",
+        offsetSample: 0,
+        loopStartSample: nextTrack.loop?.startSample,
+        loopEndSample: nextTrack.loop?.endSample,
+        loadingStatus: `${ui(language, "loadingPlayback")}: ${nextTrack.fileName}`,
+        playingStatus: `${ui(language, "playing")}: ${nextTrack.fileName}`
+      });
+      return;
+    }
+
+    if (currentPlaybackKind === "loop-check") {
+      if (!nextTrack.loop) {
+        stopPlayback(ui(language, "setLoopBeforeCheck"));
+        return;
+      }
+      const preRollSamples = msToSample(settings.loopCheckPrerollMs, nextTrack.sampleRate);
+      await startPlayback(nextTrack, {
+        kind: "loop-check",
+        offsetSample: Math.max(0, nextTrack.loop.endSample - preRollSamples),
+        loopStartSample: nextTrack.loop.startSample,
+        loopEndSample: nextTrack.loop.endSample,
+        loadingStatus: `${ui(language, "loadingLoopCheck")}: ${nextTrack.fileName}`,
+        playingStatus: `${ui(language, "checkingLoop")}: ${nextTrack.fileName}`
+      });
+    }
+  }
+
   async function startPlayback(
     track: TrackInfo,
     options: {
@@ -1086,20 +1136,27 @@ export default function App(): React.ReactElement {
       const buffer = await audioContext.decodeAudioData(data.slice(0));
       if (requestId !== playbackRequestRef.current) return;
       const source = audioContext.createBufferSource();
+      const gain = audioContext.createGain();
       source.buffer = buffer;
       if (options.loopStartSample !== undefined && options.loopEndSample !== undefined) {
         source.loop = true;
         source.loopStart = options.loopStartSample / track.sampleRate;
         source.loopEnd = options.loopEndSample / track.sampleRate;
       }
-      source.connect(audioContext.destination);
+      const now = audioContext.currentTime;
+      const fadeSeconds = playbackFadeMs / 1000;
+      gain.gain.setValueAtTime(0.0001, now);
+      gain.gain.linearRampToValueAtTime(1, now + fadeSeconds);
+      source.connect(gain);
+      gain.connect(audioContext.destination);
       playbackRef.current = {
         source,
+        gain,
         trackId: track.id,
         kind: options.kind,
         sampleRate: track.sampleRate,
         durationSamples: track.durationSamples,
-        startedAt: audioContext.currentTime,
+        startedAt: now,
         offsetSec: options.offsetSample / track.sampleRate,
         loopStartSec: options.loopStartSample === undefined ? undefined : options.loopStartSample / track.sampleRate,
         loopEndSec: options.loopEndSample === undefined ? undefined : options.loopEndSample / track.sampleRate,
@@ -1482,7 +1539,7 @@ export default function App(): React.ReactElement {
           playhead={playhead}
           togglePlayback={togglePlayback}
           checkLoopPlayback={checkLoopPlayback}
-          stopPlayback={stopPlayback}
+          movePlaybackTrack={movePlaybackTrack}
           language={language}
           displayUnit={displayUnit}
         />
@@ -2123,7 +2180,7 @@ function WaveformView(props: {
   playhead: { trackId: string; sample: number } | null;
   togglePlayback: (track: TrackInfo) => Promise<void>;
   checkLoopPlayback: (track: TrackInfo) => Promise<void>;
-  stopPlayback: () => void;
+  movePlaybackTrack: (direction: -1 | 1, orderedTracks: TrackInfo[]) => Promise<void>;
   language: Language;
   displayUnit: DisplayUnit;
 }): React.ReactElement {
@@ -2154,18 +2211,22 @@ function WaveformView(props: {
     playhead,
     togglePlayback,
     checkLoopPlayback,
-    stopPlayback,
+    movePlaybackTrack,
     language,
     displayUnit
   } = props;
   const isTrackPlaying = selectedTrack !== null && playingTrackId === selectedTrack.id && playbackKind === "track";
   const isLoopChecking = selectedTrack !== null && playingTrackId === selectedTrack.id && playbackKind === "loop-check";
+  const selectedTrackIndex = selectedTrack ? tracks.findIndex((track) => track.id === selectedTrack.id) : -1;
+  const hasPreviousTrack = selectedTrackIndex > 0;
+  const hasNextTrack = selectedTrackIndex >= 0 && selectedTrackIndex < tracks.length - 1;
   return (
     <section className="workspace waveform-mode">
       <div className="batch-grid panel">
         <TrackTable
           tracks={tracks}
           selectedIds={selectedIds}
+          previewTrackId={selectedTrack?.id ?? null}
           sortRules={sortRules}
           setSortRules={setSortRules}
           focusTrack={focusTrack}
@@ -2204,8 +2265,8 @@ function WaveformView(props: {
               <button onClick={() => void checkLoopPlayback(selectedTrack)} disabled={!selectedTrack.loop} aria-label="Check loop transition">
                 {isLoopChecking ? <Square size={15} /> : <Repeat size={18} />} {isLoopChecking ? ui(language, "stopCheck") : ui(language, "checkLoop")}
               </button>
-              <button>&lt;&lt;</button>
-              <button>&gt;&gt;</button>
+              <button onClick={() => void movePlaybackTrack(-1, tracks)} disabled={!hasPreviousTrack} aria-label="Previous file">&lt;&lt;</button>
+              <button onClick={() => void movePlaybackTrack(1, tracks)} disabled={!hasNextTrack} aria-label="Next file">&gt;&gt;</button>
               <span>{selectedTrack.loop ? formatSamplePosition(selectedTrack.loop.startSample, selectedTrack.sampleRate, displayUnit) : emptyPosition(displayUnit)} / {formatTrackDuration(selectedTrack, displayUnit)}</span>
             </div>
           </>
@@ -2234,6 +2295,7 @@ function WaveformView(props: {
 function TrackTable(props: {
   tracks: TrackInfo[];
   selectedIds: string[];
+  previewTrackId: string | null;
   sortRules: SortRule[];
   setSortRules: (rules: SortRule[]) => void;
   focusTrack: (id: string) => void;
@@ -2268,7 +2330,10 @@ function TrackTable(props: {
         {props.tracks.map((track) => (
           <tr
             key={track.id}
-            className={props.selectedIds.includes(track.id) ? "selected" : ""}
+            className={[
+              props.selectedIds.includes(track.id) ? "selected" : "",
+              props.previewTrackId === track.id ? "previewing" : ""
+            ].filter(Boolean).join(" ")}
             onPointerDown={(event) => {
               if (event.button === 0) {
                 props.focusTrack(track.id);

@@ -13,8 +13,8 @@
 
 body {
   margin: 0;
-  min-width: 1180px;
-  min-height: 760px;
+  min-width: 1480px;
+  min-height: 880px;
   overflow: hidden;
 }
 
@@ -36,6 +36,7 @@ button {
   background: linear-gradient(#243037, #151f25);
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08), 0 1px 2px rgba(0, 0, 0, 0.3);
   cursor: pointer;
+  white-space: nowrap;
 }
 
 button:hover:not(:disabled) {
@@ -861,12 +862,36 @@ select:focus {
   background: rgba(35, 91, 135, 0.42);
 }
 
+.data-table tr.previewing td {
+  background: rgba(43, 215, 233, 0.08);
+}
+
+.data-table tr.previewing td:first-child {
+  box-shadow: inset 3px 0 0 #2bd7e9;
+}
+
+.data-table tr.selected.previewing td {
+  background: rgba(48, 112, 160, 0.62);
+}
+
+.data-table tr.selected.previewing td:first-child {
+  box-shadow: inset 3px 0 0 #8df3ff;
+}
+
 .data-table tr:hover td {
   background: rgba(255, 255, 255, 0.035);
 }
 
+.data-table tr.previewing:hover td {
+  background: rgba(43, 215, 233, 0.14);
+}
+
 .data-table tr.selected:hover td {
   background: rgba(48, 112, 160, 0.54);
+}
+
+.data-table tr.selected.previewing:hover td {
+  background: rgba(58, 132, 184, 0.72);
 }
 
 .data-table td.check-cell:hover {
