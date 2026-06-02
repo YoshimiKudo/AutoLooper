@@ -3,9 +3,13 @@ import path from "node:path";
 import crypto from "node:crypto";
 import type { ImportResult, SaveResult, TrackInfo } from "../../shared/types.js";
 import { parseAiff, writeAiffLoop } from "../audio/aiff.js";
+import { parseMp3 } from "../audio/mp3.js";
 import { parseOggVorbis, writeOggVorbisLoop } from "../audio/ogg.js";
 import { parseWav, writeWavLoop } from "../audio/wav.js";
 import { readLimitedAudioFile } from "./limits.js";
+
+const mp3LoopEmbeddingUnsupported =
+  "MP3 loop markers can be used inside AutoLooper, but cannot be embedded when saving MP3 files.";
 
 export async function importAudioFiles(filePaths: string[]): Promise<ImportResult> {
   const tracks: TrackInfo[] = [];
@@ -22,7 +26,9 @@ export async function importAudioFiles(filePaths: string[]): Promise<ImportResul
             ? parseAiff(buffer)
             : ext === ".ogg"
               ? parseOggVorbis(buffer)
-              : null;
+              : ext === ".mp3"
+                ? parseMp3(buffer)
+                : null;
 
       if (!parsed) {
         errors.push(`${filePath}: unsupported file type`);
@@ -65,6 +71,15 @@ export async function saveLoopedCopy(track: TrackInfo): Promise<SaveResult> {
   }
 
   try {
+    if (track.format === "mp3") {
+      return {
+        id: track.id,
+        outputPath: track.outputPath,
+        status: "warning",
+        validation: mp3LoopEmbeddingUnsupported
+      };
+    }
+
     const input = await readLimitedAudioFile(track.filePath);
     const output =
       track.format === "wav"

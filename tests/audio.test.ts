@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
-import type { LoopMarker } from "../src/shared/types";
+import type { LoopMarker, TrackInfo } from "../src/shared/types";
 import { measureMatch } from "../src/shared/detectCore";
+import { parseMp3 } from "../src/main/audio/mp3";
+import { saveLoopedCopy } from "../src/main/services/files";
 import { parseWav, writeWavLoop } from "../src/main/audio/wav";
 
 describe("WAV loop metadata", () => {
@@ -75,6 +77,55 @@ describe("match scoring", () => {
   });
 });
 
+describe("MP3 metadata", () => {
+  it("reads MPEG Layer III frames after an ID3v2 tag", () => {
+    const mp3 = createTestMp3(4, true);
+    const parsed = parseMp3(mp3);
+
+    expect(parsed.format).toBe("mp3");
+    expect(parsed.sampleRate).toBe(44100);
+    expect(parsed.channels).toBe(2);
+    expect(parsed.bitDepth).toBeNull();
+    expect(parsed.durationSamples).toBe(4 * 1152);
+    expect(parsed.loop).toBeNull();
+  });
+
+  it("rejects files without MPEG Layer III frames", () => {
+    expect(() => parseMp3(Buffer.from("not an mp3"))).toThrow(/Layer III frames/i);
+  });
+
+  it("keeps MP3 loop markers app-local and warns on embedded save", async () => {
+    const loop: LoopMarker = {
+      startSample: 1000,
+      endSample: 5000,
+      lengthSamples: 4000,
+      confidence: 97,
+      source: "detected"
+    };
+    const track: TrackInfo = {
+      id: "mp3-test",
+      filePath: "missing.mp3",
+      fileName: "missing.mp3",
+      outputPath: "missing_looped.mp3",
+      format: "mp3",
+      sampleRate: 44100,
+      bitDepth: null,
+      channels: 2,
+      durationSamples: 10000,
+      durationMs: 226.76,
+      loop,
+      status: "detected",
+      validation: "Detected at 97.0%.",
+      waveform: null
+    };
+
+    const result = await saveLoopedCopy(track);
+
+    expect(result.status).toBe("warning");
+    expect(result.validation).toMatch(/cannot be embedded/i);
+  });
+});
+
 function createTestWav(
   sampleRate: number,
   channels: number,
@@ -113,4 +164,26 @@ function createTestWav(
   }
 
   return wav;
+}
+
+function createTestMp3(frameCount: number, withId3: boolean): Buffer {
+  const frameLength = Math.floor((144000 * 128) / 44100);
+  const header = Buffer.from([0xff, 0xfb, 0x90, 0x00]);
+  const frame = Buffer.concat([header, Buffer.alloc(frameLength - header.length)]);
+  const frames = Array.from({ length: frameCount }, () => frame);
+
+  if (!withId3) {
+    return Buffer.concat(frames);
+  }
+
+  const tagPayload = Buffer.from("test");
+  const id3 = Buffer.alloc(10);
+  id3.write("ID3", 0, "ascii");
+  id3[3] = 4;
+  id3[4] = 0;
+  id3[6] = 0;
+  id3[7] = 0;
+  id3[8] = 0;
+  id3[9] = tagPayload.length;
+  return Buffer.concat([id3, tagPayload, ...frames]);
 }

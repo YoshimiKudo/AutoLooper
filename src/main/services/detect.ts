@@ -14,7 +14,7 @@ export async function detectTrackLoop(track: TrackInfo, settings: DetectionSetti
         id: track.id,
         loop: track.loop,
         status: "error",
-        validation: "Use the renderer WebAudio path for Ogg Vorbis detection."
+        validation: `Use the renderer WebAudio path for ${track.format.toUpperCase()} detection.`
       };
     }
     const mono = downmixMono(decoded.pcm);

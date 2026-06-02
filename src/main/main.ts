@@ -65,7 +65,7 @@ app.whenReady().then(() => {
       title: "Import audio files",
       properties: ["openFile", "multiSelections"],
       filters: [
-        { name: "Audio", extensions: ["wav", "aif", "aiff", "ogg"] },
+        { name: "Audio", extensions: ["wav", "aif", "aiff", "ogg", "mp3"] },
         { name: "All Files", extensions: ["*"] }
       ]
     };
@@ -88,11 +88,11 @@ app.whenReady().then(() => {
     const supportedPaths = filePaths.filter((filePath): filePath is string => {
       if (typeof filePath !== "string") return false;
       const ext = path.extname(filePath).toLowerCase();
-      return ext === ".wav" || ext === ".aif" || ext === ".aiff" || ext === ".ogg";
+      return ext === ".wav" || ext === ".aif" || ext === ".aiff" || ext === ".ogg" || ext === ".mp3";
     });
 
     if (supportedPaths.length === 0) {
-      return { tracks: [], errors: ["Drop WAV, AIFF, AIF, or OGG files."] };
+      return { tracks: [], errors: ["Drop WAV, AIFF, AIF, OGG, or MP3 files."] };
     }
 
     return rememberImportedTracks(await importAudioFiles(supportedPaths));

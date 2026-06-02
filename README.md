@@ -2,48 +2,23 @@
 
 ## 日本語
 
-AutoLooper は、ゲーム音楽向けのループマーカー検出・編集デスクトップアプリです。WAV、AIFF、Ogg Vorbis ファイルを読み込み、最良のループ候補を自動採用し、波形表示とリストエディタの両方で確認・編集できます。
+AutoLooper は、ゲーム音楽向けのループマーカー検出・編集デスクトップアプリです。WAV、AIFF、Ogg Vorbis、MP3 ファイルを読み込み、最良のループ候補を自動採用し、波形表示とリストエディタの両方で確認・編集できます。
 
-### ダウンロード
+### バージョン情報
 
-最新版は GitHub Releases から取得できます。
-
-- **アプリ本体をダウンロード**: [AutoLooper.0.1.0.exe](https://github.com/YoshimiKudo/AutoLooper/releases/download/v0.1.0-beta/AutoLooper.0.1.0.exe)
-- **紹介動画を見る**: [X の投稿で再生](https://x.com/yoshimikudo/status/2061571506950599070)
-- **チェックサム**: [SHA256SUMS.txt](https://github.com/YoshimiKudo/AutoLooper/releases/download/v0.1.0-beta/SHA256SUMS.txt)
-- **リリースページ**: [AutoLooper v0.1.0-beta](https://github.com/YoshimiKudo/AutoLooper/releases/tag/v0.1.0-beta)
-
-`SHA256SUMS.txt` は、ダウンロードした exe がリリース時のファイルと一致するか確認するためのファイルです。
-
-### 紹介動画
-
-[![AutoLooper 紹介動画](docs/autolooper-video-thumbnail.png)](https://x.com/yoshimikudo/status/2061571506950599070)
-
-画像をクリックすると X の投稿で紹介動画を再生できます。
-
-### 対応環境
-
-- Windows
-- macOS は将来対応予定
-- 現在の exe はコード署名されていません。Windows SmartScreen の警告が表示される場合があります。
-
-### Windows SmartScreen について
-
-現在のベータ版 exe はコード署名されていないため、初回起動時に Windows Defender SmartScreen の「Windows によって PC が保護されました」または「不明な発行元」の警告が出る場合があります。
-
-公式配布元は GitHub Releases のみです。ダウンロード元がこのリポジトリの Release であることを確認し、必要に応じて `SHA256SUMS.txt` でファイルの一致を確認してください。
-
-警告画面から起動する場合:
-
-1. `詳細情報` を選択
-2. `実行` を選択
-
-会社PCや Smart App Control が有効な環境では、組織のセキュリティ設定により実行できない場合があります。
+- アプリバージョン: `0.2.0`
+- リリースタグ: `v0.2.0-beta`
+- リリース日: `2026-06-02` JST
+- リリース種別: ベータ / プレリリース
+- 現在の主な対象環境: Windows
+- macOS 対応は将来予定です。
 
 ### 主な機能
 
-- `.wav`、`.aif`、`.aiff`、`.ogg` の読み込み
+- `.wav`、`.aif`、`.aiff`、`.ogg`、`.mp3` の読み込み
 - Ogg は Vorbis を対象
+- MP3 は読み込み、波形表示、自動検出、手動マーカー編集、ループ再生に対応
+- MP3 へのループマーカー埋め込み保存は非対応。保存時に警告を表示
 - 複数ファイルの一括読み込みと一括検出
 - 最良候補を自動採用するループ検出
 - 波形上のループ開始・終了マーカー表示
@@ -113,10 +88,9 @@ npm.cmd run dist
 ### 注意
 
 - 自動保存は行いません。保存操作を実行したときだけ、ループ付きコピーを書き出します。
+- MP3 はループマーカーのアプリ内利用には対応しますが、MP3ファイル自体への埋め込み保存には対応しません。
 - ループ長などに無効な値を入力すると、トラック状態が警告になり、検証欄に理由が表示されます。
 - 現在の開発・検証環境は Windows です。macOS 対応は将来想定です。
-- 現在の exe はコード署名されていません。
-- SmartScreen 警告が出た場合は、公式 Release から取得したファイルであることを確認し、必要に応じて `詳細情報` から実行してください。
 
 ### サポートと連絡先
 
@@ -126,54 +100,29 @@ npm.cmd run dist
 
 ### ライセンス
 
-ライセンス方針は未確定です。Public 公開する場合は、再利用を許可する範囲に応じて LICENSE ファイルを追加してください。
+ライセンス方針は未確定です。再利用条件を明確にする必要がある場合は、LICENSE ファイルを追加してください。
 
 ---
 
 ## English
 
-AutoLooper is a desktop app for detecting and editing loop markers in game music files. It imports WAV, AIFF, and Ogg Vorbis files, automatically adopts the best loop candidate, and lets you review and edit loop points in both waveform and list editor views.
+AutoLooper is a desktop app for detecting and editing loop markers in game music files. It imports WAV, AIFF, Ogg Vorbis, and MP3 files, automatically adopts the best loop candidate, and lets you review and edit loop points in both waveform and list editor views.
 
-### Download
+### Version
 
-The latest build is available from GitHub Releases.
-
-- **Download the app**: [AutoLooper.0.1.0.exe](https://github.com/YoshimiKudo/AutoLooper/releases/download/v0.1.0-beta/AutoLooper.0.1.0.exe)
-- **Watch the intro video**: [Play it on X](https://x.com/yoshimikudo/status/2061571506950599070)
-- **Checksum**: [SHA256SUMS.txt](https://github.com/YoshimiKudo/AutoLooper/releases/download/v0.1.0-beta/SHA256SUMS.txt)
-- **Release page**: [AutoLooper v0.1.0-beta](https://github.com/YoshimiKudo/AutoLooper/releases/tag/v0.1.0-beta)
-
-`SHA256SUMS.txt` is provided to verify that the downloaded exe matches the release artifact.
-
-### Feature Intro Video
-
-[![AutoLooper feature intro video](docs/autolooper-video-thumbnail.png)](https://x.com/yoshimikudo/status/2061571506950599070)
-
-Click the thumbnail to play the intro video on X.
-
-### Supported Environment
-
-- Windows
-- macOS support is planned for a future release
-- The current exe is not code-signed, so Windows SmartScreen may show a warning.
-
-### Windows SmartScreen
-
-The current beta executable is not code-signed. On first launch, Windows Defender SmartScreen may show a warning such as "Windows protected your PC" or "Unknown publisher".
-
-The official distribution source is GitHub Releases only. Confirm that the file was downloaded from this repository's Release page, and use `SHA256SUMS.txt` if you want to verify that the file matches the release artifact.
-
-If you choose to run it from the SmartScreen warning:
-
-1. Select `More info`
-2. Select `Run anyway`
-
-On company-managed PCs or environments with Smart App Control enabled, organization security policy may prevent the app from running.
+- App version: `0.2.0`
+- Release tag: `v0.2.0-beta`
+- Release date: `2026-06-02` JST
+- Release type: beta / prerelease
+- Primary current target: Windows
+- macOS support is planned for a future release.
 
 ### Features
 
-- Import `.wav`, `.aif`, `.aiff`, and `.ogg` files
+- Import `.wav`, `.aif`, `.aiff`, `.ogg`, and `.mp3` files
 - Ogg support targets Vorbis
+- MP3 supports import, waveform display, automatic detection, manual marker editing, and loop playback
+- MP3 loop marker embedding is not supported. The app shows a warning when saving MP3 tracks
 - Batch import and batch detection
 - Automatic adoption of the best loop candidate
 - Waveform display with loop start and loop end markers
@@ -243,10 +192,9 @@ Build outputs are written to the `release` folder.
 ### Notes
 
 - The app does not autosave. Looped copies are written only when the save action is executed.
+- MP3 markers can be used inside the app, but cannot be embedded back into MP3 files.
 - Invalid loop length input sets the track status to warning and shows the reason in the validation column.
 - macOS support is planned for the future. Current development and verification are on Windows.
-- The current exe is not code-signed.
-- If SmartScreen shows a warning, verify that the file came from the official Release page and use `More info` if you choose to run it.
 
 ### Support and Contact
 
@@ -256,4 +204,4 @@ Build outputs are written to the `release` folder.
 
 ### License
 
-The license policy has not been decided yet. Add a LICENSE file before making the repository public if reuse terms need to be clear.
+The license policy has not been decided yet. Add a LICENSE file before publishing reuse terms.

@@ -1,8 +1,8 @@
 ﻿import React, { useEffect, useId, useMemo, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
-import { BookOpen, Copy, Crosshair, FileAudio, FolderOpen, Hash, Languages, Play, Repeat, Save, Search, Square, Table2, Trash2, Upload } from "lucide-react";
-import type { DetectionResult, DetectionSettings, TrackInfo, TrackStatus, WaveformPeaks } from "../shared/types";
-import { findBestLoop } from "../shared/detectCore";
+import { BookOpen, Copy, Crosshair, FileAudio, FolderOpen, Hash, Languages, Play, Redo2, Repeat, Save, Search, Square, Table2, Trash2, Undo2, Upload } from "lucide-react";
+import type { AudioFormat, DetectionResult, DetectionSettings, TrackInfo, TrackStatus, WaveformPeaks } from "../shared/types";
+import type { LoopCandidate } from "../shared/detectCore";
 import { formatPercent, formatSamples, formatTime, msToSample, sampleToMs } from "../shared/format";
 import "./styles.css";
 
@@ -65,9 +65,14 @@ interface ImportProgress {
   startedAtMs: number;
 }
 
+interface TrackHistoryTransaction {
+  snapshot: TrackInfo[];
+  used: boolean;
+}
+
 const defaultSettings: DetectionSettings = {
-  matchWindowMs: 3000,
-  matchThreshold: 95,
+  matchWindowMs: 1500,
+  matchThreshold: 88,
   minimumLoopMs: 3000,
   loopCheckPrerollMs: 1000
 };
@@ -79,6 +84,7 @@ const detectionPresets: Record<Exclude<DetectionPreset, "custom">, Pick<Detectio
 };
 
 const customPresetStorageKey = "autolooper.customDetectionPreset.v1";
+const maxTrackHistoryEntries = 100;
 
 const uiText = {
   ja: {
@@ -91,6 +97,12 @@ const uiText = {
     autoLoopAll: "全て自動ループ",
     saveLoopedCopies: "ループ付きコピー保存",
     removeFromList: "リストから削除",
+    undo: "元に戻す",
+    redo: "やり直す",
+    undoApplied: "元に戻しました",
+    redoApplied: "やり直しました",
+    nothingToUndo: "元に戻せる編集はありません",
+    nothingToRedo: "やり直せる編集はありません",
     files: "件",
     warnings: "警告",
     errors: "エラー",
@@ -112,6 +124,8 @@ const uiText = {
     importProgressDetail: "音声ファイルを解析しています",
     imported: "件読み込み",
     importedWithErrors: "件読み込み、エラー",
+    preparingWaveform: "波形を準備中",
+    waveformReady: "波形を準備しました",
     autoLooping: "自動ループ検出中",
     autoLoopComplete: "自動ループ完了",
     autoLoopCanceled: "自動ループを中止しました",
@@ -138,7 +152,7 @@ const uiText = {
     checkingLoop: "ループ確認中",
     stoppedRemoved: "削除したトラックの再生を停止",
     removedFromList: "件をリストから削除しました。音声ファイル自体は削除していません。",
-    emptyImport: "WAV、AIFF、Ogg Vorbis ファイルを読み込んでください。",
+    emptyImport: "WAV、AIFF、Ogg Vorbis、MP3 ファイルを読み込んでください。",
     play: "再生",
     stop: "停止",
     checkLoop: "ループ確認",
@@ -213,6 +227,12 @@ const uiText = {
     autoLoopAll: "Auto Loop All",
     saveLoopedCopies: "Save Looped Copies",
     removeFromList: "Remove from List",
+    undo: "Undo",
+    redo: "Redo",
+    undoApplied: "Undone",
+    redoApplied: "Redone",
+    nothingToUndo: "Nothing to undo",
+    nothingToRedo: "Nothing to redo",
     files: "files",
     warnings: "warnings",
     errors: "errors",
@@ -234,6 +254,8 @@ const uiText = {
     importProgressDetail: "Analyzing audio files",
     imported: "imported",
     importedWithErrors: "imported, errors",
+    preparingWaveform: "Preparing waveform",
+    waveformReady: "Waveform ready",
     autoLooping: "Auto looping",
     autoLoopComplete: "Auto Loop complete",
     autoLoopCanceled: "Auto Loop canceled",
@@ -260,7 +282,7 @@ const uiText = {
     checkingLoop: "Checking loop",
     stoppedRemoved: "Stopped: removed track",
     removedFromList: "removed from the list. Files were not deleted.",
-    emptyImport: "Import WAV, AIFF, or Ogg Vorbis files.",
+    emptyImport: "Import WAV, AIFF, Ogg Vorbis, or MP3 files.",
     play: "Play",
     stop: "Stop",
     checkLoop: "Check Loop",
@@ -406,7 +428,7 @@ export default function App(): React.ReactElement {
   const [activeTrackId, setActiveTrackId] = useState<string | null>(demoTracks[0]?.id ?? null);
   const [settings, setSettings] = useState(defaultSettings);
   const [savedCustomSettings, setSavedCustomSettings] = useState<DetectionSettings | null>(() => readSavedCustomPreset());
-  const [detectionPreset, setDetectionPreset] = useState<DetectionPreset>("high");
+  const [detectionPreset, setDetectionPreset] = useState<DetectionPreset>("mid");
   const [view, setView] = useState<ViewMode>("waveform");
   const [sortRules, setSortRules] = useState<SortRule[]>([{ key: "fileName", direction: "asc" }]);
   const [filter, setFilter] = useState("");
@@ -422,12 +444,18 @@ export default function App(): React.ReactElement {
   const [readmeError, setReadmeError] = useState<string | null>(null);
   const [detectionProgress, setDetectionProgress] = useState<DetectionProgress | null>(null);
   const [importProgress, setImportProgress] = useState<ImportProgress | null>(null);
+  const [waveformPreviewTrackId, setWaveformPreviewTrackId] = useState<string | null>(null);
   const playbackRef = useRef<PlaybackSession | null>(null);
   const playbackRequestRef = useRef(0);
   const checkboxSelectionDragRef = useRef<CheckboxSelectionDrag | null>(null);
   const scanCancelRequestedRef = useRef(false);
+  const tracksRef = useRef<TrackInfo[]>(demoTracks);
+  const historyPastRef = useRef<TrackInfo[][]>([]);
+  const historyFutureRef = useRef<TrackInfo[][]>([]);
+  const historyTransactionRef = useRef<TrackHistoryTransaction | null>(null);
+  const [historyCounts, setHistoryCounts] = useState({ past: 0, future: 0 });
 
-  const selectedTrackId = detectionProgress?.currentTrackId ?? resolveActiveTrackId(activeTrackId, selectedIds, tracks);
+  const selectedTrackId = detectionProgress?.currentTrackId ?? waveformPreviewTrackId ?? resolveActiveTrackId(activeTrackId, selectedIds, tracks);
   const selectedTrack = tracks.find((track) => track.id === selectedTrackId) ?? null;
   const visibleTracks = useMemo(() => sortTracks(filterTracks(tracks, filter), sortRules), [tracks, filter, sortRules]);
   const selectedTracks = tracks.filter((track) => selectedIds.includes(track.id));
@@ -439,6 +467,10 @@ export default function App(): React.ReactElement {
   const issueTracks = issuePanel === "warnings" ? warningTracks : issuePanel === "errors" ? errorTracks : [];
   const isDetecting = detectionProgress !== null;
   const isImporting = importProgress !== null;
+
+  useEffect(() => {
+    tracksRef.current = tracks;
+  }, [tracks]);
 
   useEffect(() => {
     const unsubscribeImport = window.autoLooper.onDroppedFilesImported((result) => {
@@ -530,6 +562,26 @@ export default function App(): React.ReactElement {
   }, [removableTrackIds]);
 
   useEffect(() => {
+    const handleHistoryKeyDown = (event: KeyboardEvent) => {
+      const key = event.key.toLowerCase();
+      const modifier = event.ctrlKey || event.metaKey;
+      const isUndo = modifier && !event.altKey && key === "z" && !event.shiftKey;
+      const isRedo = modifier && !event.altKey && (key === "y" || (key === "z" && event.shiftKey));
+      if (!isUndo && !isRedo) return;
+      const target = event.target;
+      if (target instanceof HTMLElement && (target.closest("input, textarea, select") || target.isContentEditable)) return;
+      event.preventDefault();
+      if (isUndo) {
+        undoTrackHistory();
+      } else {
+        redoTrackHistory();
+      }
+    };
+    window.addEventListener("keydown", handleHistoryKeyDown);
+    return () => window.removeEventListener("keydown", handleHistoryKeyDown);
+  }, [historyCounts.past, historyCounts.future, language]);
+
+  useEffect(() => {
     if (issuePanel === "warnings" && warningTracks.length === 0) setIssuePanel(null);
     if (issuePanel === "errors" && errorTracks.length === 0) setIssuePanel(null);
   }, [issuePanel, warningTracks.length, errorTracks.length]);
@@ -540,9 +592,15 @@ export default function App(): React.ReactElement {
 
   function applyImportResult(result: { tracks: TrackInfo[]; errors: string[] }): void {
     if (result.tracks.length > 0) {
-      setTracks((current) => [...current, ...result.tracks]);
+      clearTrackHistory();
+      setTracks((current) => {
+        const next = [...current, ...result.tracks];
+        tracksRef.current = next;
+        return next;
+      });
       setSelectedIds([result.tracks[0].id]);
       setActiveTrackId(result.tracks[0].id);
+      void prepareWaveformPreviews(result.tracks);
     }
     setStatus(
       result.errors.length
@@ -558,6 +616,108 @@ export default function App(): React.ReactElement {
     } catch (error) {
       setStatus(error instanceof Error ? `${ui(language, "error")}: ${error.message}` : ui(language, "error"));
     }
+  }
+
+  async function prepareWaveformPreviews(importedTracks: TrackInfo[]): Promise<void> {
+    const targets = importedTracks.filter((track) => !track.waveform && usesWebAudioDetection(track.format));
+    if (targets.length === 0) return;
+    try {
+      for (const track of targets) {
+        setWaveformPreviewTrackId(track.id);
+        setStatus(`${ui(language, "preparingWaveform")}: ${track.fileName}`);
+        await waitForUiFrame();
+        try {
+          const patch = await decodeTrackPreview(track);
+          setTracks((current) => current.map((item) => (item.id === track.id ? { ...item, ...patch } : item)));
+        } catch (error) {
+          const validation = error instanceof Error ? `${track.format.toUpperCase()} decode failed: ${error.message}` : `${track.format.toUpperCase()} decode failed.`;
+          setTracks((current) =>
+            current.map((item) => (item.id === track.id ? { ...item, status: "warning", validation } : item))
+          );
+        }
+        await waitForUiFrame();
+      }
+      setStatus(`${ui(language, "waveformReady")}: ${targets.length}`);
+    } finally {
+      setWaveformPreviewTrackId(null);
+    }
+  }
+
+  function syncHistoryCounts(): void {
+    setHistoryCounts({
+      past: historyPastRef.current.length,
+      future: historyFutureRef.current.length
+    });
+  }
+
+  function clearTrackHistory(): void {
+    historyPastRef.current = [];
+    historyFutureRef.current = [];
+    syncHistoryCounts();
+  }
+
+  function cloneTrackHistorySnapshot(source = tracksRef.current): TrackInfo[] {
+    return source.map((track) => ({
+      ...track,
+      loop: track.loop ? { ...track.loop } : null
+    }));
+  }
+
+  function recordTrackHistory(): void {
+    const transaction = historyTransactionRef.current;
+    if (transaction?.used) return;
+    const snapshot = transaction ? transaction.snapshot : cloneTrackHistorySnapshot();
+    historyPastRef.current = [...historyPastRef.current, snapshot].slice(-maxTrackHistoryEntries);
+    historyFutureRef.current = [];
+    if (transaction) transaction.used = true;
+    syncHistoryCounts();
+  }
+
+  function runTrackHistoryTransaction(callback: () => void): void {
+    const parentTransaction = historyTransactionRef.current;
+    if (!parentTransaction) {
+      historyTransactionRef.current = {
+        snapshot: cloneTrackHistorySnapshot(),
+        used: false
+      };
+    }
+    try {
+      callback();
+    } finally {
+      if (!parentTransaction) {
+        historyTransactionRef.current = null;
+      }
+    }
+  }
+
+  function undoTrackHistory(): void {
+    const previous = historyPastRef.current.at(-1);
+    if (!previous) {
+      setStatus(ui(language, "nothingToUndo"));
+      return;
+    }
+    historyPastRef.current = historyPastRef.current.slice(0, -1);
+    historyFutureRef.current = [...historyFutureRef.current, cloneTrackHistorySnapshot()];
+    const restored = cloneTrackHistorySnapshot(previous);
+    tracksRef.current = restored;
+    setTracks(restored);
+    syncHistoryCounts();
+    setStatus(ui(language, "undoApplied"));
+  }
+
+  function redoTrackHistory(): void {
+    const next = historyFutureRef.current.at(-1);
+    if (!next) {
+      setStatus(ui(language, "nothingToRedo"));
+      return;
+    }
+    historyFutureRef.current = historyFutureRef.current.slice(0, -1);
+    historyPastRef.current = [...historyPastRef.current, cloneTrackHistorySnapshot()].slice(-maxTrackHistoryEntries);
+    const restored = cloneTrackHistorySnapshot(next);
+    tracksRef.current = restored;
+    setTracks(restored);
+    syncHistoryCounts();
+    setStatus(ui(language, "redoApplied"));
   }
 
   function updateSettings(patch: Partial<DetectionSettings>): void {
@@ -591,6 +751,7 @@ export default function App(): React.ReactElement {
     const results: DetectionResult[] = [];
     const startedAtMs = Date.now();
     let canceled = false;
+    clearTrackHistory();
     scanCancelRequestedRef.current = false;
     setStatus(`${ui(language, "autoLooping")}: 0/${total}`);
     try {
@@ -620,8 +781,8 @@ export default function App(): React.ReactElement {
         await waitForUiFrame();
 
         const rendererResult =
-          track.format === "ogg"
-            ? await detectOggWithWebAudio(track, settings)
+          usesWebAudioDetection(track.format)
+            ? await detectWithWebAudio(track, settings)
             : { result: (await window.autoLooper.detectTracks([track], settings))[0] };
         if (scanCancelRequestedRef.current) {
           canceled = true;
@@ -697,8 +858,15 @@ export default function App(): React.ReactElement {
     setStatus(`${ui(language, "saveComplete")}: ${results.filter((item) => item.status === "saved").length}/${countText(language, results.length, "savedCount")}`);
   }
 
-  function patchTrack(id: string, patch: Partial<TrackInfo>): void {
-    setTracks((current) => current.map((track) => (track.id === id ? { ...track, ...patch } : track)));
+  function patchTrack(id: string, patch: Partial<TrackInfo>, recordHistory = true): void {
+    if (recordHistory && tracksRef.current.some((track) => track.id === id)) {
+      recordTrackHistory();
+    }
+    setTracks((current) => {
+      const next = current.map((track) => (track.id === id ? { ...track, ...patch } : track));
+      tracksRef.current = next;
+      return next;
+    });
   }
 
   function removeTracks(ids: string[]): void {
@@ -708,8 +876,11 @@ export default function App(): React.ReactElement {
       stopPlayback(ui(language, "stoppedRemoved"));
     }
     setTrackContextMenu(null);
+    if (!tracksRef.current.some((track) => removeSet.has(track.id))) return;
+    recordTrackHistory();
     setTracks((current) => {
       const remaining = current.filter((track) => !removeSet.has(track.id));
+      tracksRef.current = remaining;
       setSelectedIds((currentSelected) => {
         const kept = currentSelected.filter((id) => !removeSet.has(id));
         if (kept.length > 0) return kept;
@@ -920,8 +1091,9 @@ export default function App(): React.ReactElement {
     });
   }
 
-  function moveLoopRange(track: TrackInfo, startSample: number): void {
+  function moveLoopRange(track: TrackInfo, startSample: number, recordHistory = true): void {
     if (!track.loop) return;
+    if (recordHistory) recordTrackHistory();
     const lengthSamples = track.loop.lengthSamples;
     const nextStart = clamp(Math.round(startSample), 0, Math.max(0, track.durationSamples - lengthSamples));
     const nextLoop = {
@@ -936,7 +1108,7 @@ export default function App(): React.ReactElement {
       loop: nextLoop,
       status: statusFromValidation(validation),
       validation
-    });
+    }, false);
   }
 
   function setTrackSelected(id: string, shouldSelect: boolean): void {
@@ -1083,6 +1255,22 @@ export default function App(): React.ReactElement {
         <button onClick={() => removeTracks(removableTrackIds)} disabled={removableTrackIds.length === 0 || isDetecting || isImporting}>
           <Trash2 size={18} /> {ui(language, "removeFromList")}
         </button>
+        <button
+          className="history-action"
+          onClick={undoTrackHistory}
+          disabled={historyCounts.past === 0 || isDetecting || isImporting}
+          title="Ctrl+Z"
+        >
+          <Undo2 size={18} /> {ui(language, "undo")}
+        </button>
+        <button
+          className="history-action"
+          onClick={redoTrackHistory}
+          disabled={historyCounts.future === 0 || isDetecting || isImporting}
+          title="Ctrl+Y / Ctrl+Shift+Z"
+        >
+          <Redo2 size={18} /> {ui(language, "redo")}
+        </button>
         {detectionProgress && <DetectionProgressView progress={detectionProgress} language={language} onCancel={requestDetectionCancel} />}
         {importProgress && <ImportProgressView progress={importProgress} language={language} />}
         <div className="summary">
@@ -1150,6 +1338,8 @@ export default function App(): React.ReactElement {
           patchLoopSample={patchLoopSample}
           patchLoopLength={patchLoopLength}
           moveLoopRange={moveLoopRange}
+          recordTrackHistory={recordTrackHistory}
+          currentScanningTrackId={detectionProgress?.currentTrackId ?? waveformPreviewTrackId}
           playingTrackId={playingTrackId}
           playbackKind={playbackKind}
           playhead={playhead}
@@ -1174,6 +1364,7 @@ export default function App(): React.ReactElement {
           patchTrack={patchTrack}
           patchLoopSample={patchLoopSample}
           patchLoopLength={patchLoopLength}
+          runTrackHistoryTransaction={runTrackHistoryTransaction}
           settings={settings}
           setSettings={updateSettings}
           detectionPreset={detectionPreset}
@@ -1454,22 +1645,19 @@ function renderInlineMarkdown(text: string): React.ReactNode[] {
 }
 
 let audioContext: AudioContext | null = null;
+let detectWorker: Worker | null = null;
+let detectWorkerRequestId = 0;
 
-async function detectOggWithWebAudio(track: TrackInfo, settings: DetectionSettings): Promise<RendererDetection> {
+function usesWebAudioDetection(format: AudioFormat): boolean {
+  return format === "ogg" || format === "mp3";
+}
+
+async function detectWithWebAudio(track: TrackInfo, settings: DetectionSettings): Promise<RendererDetection> {
   try {
-    audioContext ??= new AudioContext();
-    const data = await window.autoLooper.readAudioFile(track.filePath);
-    const decoded = await audioContext.decodeAudioData(data.slice(0));
+    const decoded = await decodeAudioTrack(track);
     const mono = downmixAudioBuffer(decoded);
-    const candidate = findBestLoop(mono, decoded.sampleRate, settings, track.loop);
-    const waveform = buildRendererWaveform(decoded);
-    const patch: Partial<TrackInfo> = {
-      sampleRate: decoded.sampleRate,
-      channels: decoded.numberOfChannels,
-      durationSamples: decoded.length,
-      durationMs: decoded.duration * 1000,
-      waveform
-    };
+    const patch = decodedTrackPatch(decoded);
+    const candidate = await findBestLoopInWorker(mono, decoded.sampleRate, settings, track.loop);
 
     if (!candidate) {
       return {
@@ -1506,10 +1694,70 @@ async function detectOggWithWebAudio(track: TrackInfo, settings: DetectionSettin
         id: track.id,
         loop: track.loop,
         status: "error",
-        validation: error instanceof Error ? `Ogg decode failed: ${error.message}` : "Ogg decode failed."
+        validation: error instanceof Error ? `${track.format.toUpperCase()} decode failed: ${error.message}` : `${track.format.toUpperCase()} decode failed.`
       }
     };
   }
+}
+
+function getDetectWorker(): Worker {
+  detectWorker ??= new Worker(new URL("./detectWorker.ts", import.meta.url), { type: "module" });
+  return detectWorker;
+}
+
+function findBestLoopInWorker(
+  mono: Float32Array,
+  sampleRate: number,
+  settings: DetectionSettings,
+  metadataLoop: TrackInfo["loop"]
+): Promise<LoopCandidate | null> {
+  const worker = getDetectWorker();
+  const requestId = `detect-${detectWorkerRequestId += 1}`;
+  return new Promise((resolve, reject) => {
+    const cleanup = () => {
+      worker.removeEventListener("message", handleMessage);
+      worker.removeEventListener("error", handleError);
+    };
+    const handleMessage = (event: MessageEvent<{ requestId: string; candidate: LoopCandidate | null; error?: string }>) => {
+      if (event.data.requestId !== requestId) return;
+      cleanup();
+      if (event.data.error) {
+        reject(new Error(event.data.error));
+        return;
+      }
+      resolve(event.data.candidate);
+    };
+    const handleError = (event: ErrorEvent) => {
+      cleanup();
+      detectWorker?.terminate();
+      detectWorker = null;
+      reject(new Error(event.message || "Loop detection worker failed."));
+    };
+    worker.addEventListener("message", handleMessage);
+    worker.addEventListener("error", handleError);
+    worker.postMessage({ requestId, mono, sampleRate, settings, metadataLoop }, [mono.buffer]);
+  });
+}
+
+async function decodeTrackPreview(track: TrackInfo): Promise<Partial<TrackInfo>> {
+  const decoded = await decodeAudioTrack(track);
+  return decodedTrackPatch(decoded);
+}
+
+async function decodeAudioTrack(track: TrackInfo): Promise<AudioBuffer> {
+  audioContext ??= new AudioContext();
+  const data = await window.autoLooper.readAudioFile(track.filePath);
+  return audioContext.decodeAudioData(data.slice(0));
+}
+
+function decodedTrackPatch(decoded: AudioBuffer): Partial<TrackInfo> {
+  return {
+    sampleRate: decoded.sampleRate,
+    channels: decoded.numberOfChannels,
+    durationSamples: decoded.length,
+    durationMs: decoded.duration * 1000,
+    waveform: buildRendererWaveform(decoded)
+  };
 }
 
 function downmixAudioBuffer(buffer: AudioBuffer): Float32Array {
@@ -1565,7 +1813,9 @@ function WaveformView(props: {
   openTrackContextMenu: (track: TrackInfo, event: React.MouseEvent) => void;
   patchLoopSample: (track: TrackInfo, field: "startSample" | "endSample", value: number) => void;
   patchLoopLength: (track: TrackInfo, value: number | null, invalidInput?: string) => void;
-  moveLoopRange: (track: TrackInfo, startSample: number) => void;
+  moveLoopRange: (track: TrackInfo, startSample: number, recordHistory?: boolean) => void;
+  recordTrackHistory: () => void;
+  currentScanningTrackId: string | null;
   playingTrackId: string | null;
   playbackKind: PlaybackKind | null;
   playhead: { trackId: string; sample: number } | null;
@@ -1595,6 +1845,8 @@ function WaveformView(props: {
     patchLoopSample,
     patchLoopLength,
     moveLoopRange,
+    recordTrackHistory,
+    currentScanningTrackId,
     playingTrackId,
     playbackKind,
     playhead,
@@ -1638,6 +1890,8 @@ function WaveformView(props: {
               track={selectedTrack}
               playheadSample={playhead?.trackId === selectedTrack.id ? playhead.sample : null}
               moveLoopRange={moveLoopRange}
+              recordTrackHistory={recordTrackHistory}
+              isScanning={currentScanningTrackId === selectedTrack.id || selectedTrack.status === "processing"}
               language={language}
               displayUnit={displayUnit}
             />
@@ -1749,12 +2003,16 @@ function WaveformCanvas({
   track,
   playheadSample,
   moveLoopRange,
+  recordTrackHistory,
+  isScanning,
   language,
   displayUnit
 }: {
   track: TrackInfo;
   playheadSample: number | null;
-  moveLoopRange: (track: TrackInfo, startSample: number) => void;
+  moveLoopRange: (track: TrackInfo, startSample: number, recordHistory?: boolean) => void;
+  recordTrackHistory: () => void;
+  isScanning: boolean;
   language: Language;
   displayUnit: DisplayUnit;
 }): React.ReactElement {
@@ -1762,14 +2020,13 @@ function WaveformCanvas({
   const height = 300;
   const svgRef = useRef<SVGSVGElement | null>(null);
   const scanGradientId = useId().replace(/:/g, "");
-  const [drag, setDrag] = useState<{ pointerId: number; pointerSample: number; startSample: number } | null>(null);
+  const [drag, setDrag] = useState<{ pointerId: number; pointerSample: number; startSample: number; historyRecorded: boolean } | null>(null);
   const durationSamples = Math.max(1, track.durationSamples);
   const channels = track.waveform?.channels.slice(0, 2) ?? [];
   const points = channels[0]?.min.length ?? 0;
   const startX = track.loop ? (track.loop.startSample / durationSamples) * width : null;
   const endX = track.loop ? (track.loop.endSample / durationSamples) * width : null;
   const playheadX = playheadSample === null ? null : (playheadSample / durationSamples) * width;
-  const isScanning = track.status === "processing";
 
   function sampleFromClientX(clientX: number): number {
     const bounds = svgRef.current?.getBoundingClientRect();
@@ -1793,7 +2050,8 @@ function WaveformCanvas({
     setDrag({
       pointerId: event.pointerId,
       pointerSample: sampleFromPointer(event),
-      startSample: track.loop.startSample
+      startSample: track.loop.startSample,
+      historyRecorded: false
     });
   }
 
@@ -1802,7 +2060,11 @@ function WaveformCanvas({
     if (drag.pointerId !== event.pointerId) return;
     event.preventDefault();
     const deltaSamples = sampleFromPointer(event) - drag.pointerSample;
-    moveLoopRange(track, drag.startSample + deltaSamples);
+    if (deltaSamples !== 0 && !drag.historyRecorded) {
+      recordTrackHistory();
+      setDrag({ ...drag, historyRecorded: true });
+    }
+    moveLoopRange(track, drag.startSample + deltaSamples, false);
   }
 
   function handlePointerUp(event: React.PointerEvent<SVGSVGElement>): void {
@@ -1812,11 +2074,13 @@ function WaveformCanvas({
 
   function handleLoopMouseDown(event: React.MouseEvent<SVGRectElement>): void {
     if (!track.loop) return;
+    if (drag) return;
     event.preventDefault();
     setDrag({
       pointerId: -1,
       pointerSample: sampleFromMouse(event),
-      startSample: track.loop.startSample
+      startSample: track.loop.startSample,
+      historyRecorded: false
     });
   }
 
@@ -1824,7 +2088,11 @@ function WaveformCanvas({
     if (!drag || drag.pointerId !== -1 || !track.loop) return;
     event.preventDefault();
     const deltaSamples = sampleFromMouse(event) - drag.pointerSample;
-    moveLoopRange(track, drag.startSample + deltaSamples);
+    if (deltaSamples !== 0 && !drag.historyRecorded) {
+      recordTrackHistory();
+      setDrag({ ...drag, historyRecorded: true });
+    }
+    moveLoopRange(track, drag.startSample + deltaSamples, false);
   }
 
   function handleMouseUp(): void {
@@ -2038,6 +2306,7 @@ function ListEditorView(props: {
   patchTrack: (id: string, patch: Partial<TrackInfo>) => void;
   patchLoopSample: (track: TrackInfo, field: "startSample" | "endSample", value: number) => void;
   patchLoopLength: (track: TrackInfo, value: number | null, invalidInput?: string) => void;
+  runTrackHistoryTransaction: (callback: () => void) => void;
   settings: DetectionSettings;
   setSettings: (settings: DetectionSettings) => void;
   detectionPreset: DetectionPreset;
@@ -2078,11 +2347,13 @@ function ListEditorView(props: {
   }
 
   function pasteText(text: string): void {
-    if (cellSelection) {
-      applyCellRangeTsv(text, cellSelection, visible, orderedColumns, props.displayUnit, props.patchTrack, props.settings);
-      return;
-    }
-    applyTsv(text, props.allTracks, props.displayUnit, props.patchLoopSample, props.patchLoopLength);
+    props.runTrackHistoryTransaction(() => {
+      if (cellSelection) {
+        applyCellRangeTsv(text, cellSelection, visible, orderedColumns, props.displayUnit, props.patchTrack, props.settings);
+        return;
+      }
+      applyTsv(text, props.allTracks, props.displayUnit, props.patchLoopSample, props.patchLoopLength);
+    });
   }
 
   function moveColumn(source: ListColumnKey, target: ListColumnKey): void {
@@ -2223,7 +2494,7 @@ function ListEditorView(props: {
       case "sampleRate":
         return track.sampleRate;
       case "bitDepth":
-        return track.bitDepth ?? "Vorbis";
+        return bitDepthOrCodec(track);
       case "durationSamples":
         return formatTrackDuration(track, props.displayUnit);
       case "loopStart":
@@ -2443,7 +2714,7 @@ function listCellText(track: TrackInfo, columnKey: ListColumnKey, displayUnit: D
     case "sampleRate":
       return String(track.sampleRate);
     case "bitDepth":
-      return track.bitDepth === null ? "Vorbis" : String(track.bitDepth);
+      return String(bitDepthOrCodec(track));
     case "durationSamples":
       return displayUnit === "samples" ? String(track.durationSamples) : formatTime(track.durationMs);
     case "loopStart":
@@ -2749,6 +3020,10 @@ function displayValidation(validation: string, language: Language): string {
   if (validation === "Loop length must be greater than zero.") return "ループ長は0より大きい値にしてください。";
   if (validation === "Loop length pushes loop end past audio duration.") return "ループ長を適用するとループ終了が音声の長さを超えます。";
   if (validation === "Auto Loop canceled before this track finished.") return "このトラックの処理完了前に自動ループを中止しました。";
+  if (validation === "Ready. Waveform preview uses browser MP3 decode support.") return "準備完了。波形プレビューはブラウザのMP3デコード機能を使います。";
+  if (validation === "MP3 loop markers can be used inside AutoLooper, but cannot be embedded when saving MP3 files.") {
+    return "MP3のループマーカーはAutoLooper内では使えますが、MP3ファイルへ埋め込み保存はできません。";
+  }
   const invalidLength = validation.match(/^Invalid loop length input: ?(.*)$/);
   if (invalidLength) return `ループ長の入力値が不正です: ${invalidLength[1] || "空の入力"}`;
   if (validation === "Updated from TSV paste.") return "TSV貼り付けから更新しました。";
@@ -2787,7 +3062,14 @@ function formatKhz(sampleRate: number): string {
 }
 
 function formatDetails(track: TrackInfo): string {
-  return `${formatKhz(track.sampleRate)} / ${track.bitDepth ? `${track.bitDepth}-bit` : "Vorbis"}`;
+  return `${formatKhz(track.sampleRate)} / ${bitDepthOrCodec(track)}${track.bitDepth !== null ? "-bit" : ""}`;
+}
+
+function bitDepthOrCodec(track: TrackInfo): number | string {
+  if (track.bitDepth !== null) return track.bitDepth;
+  if (track.format === "ogg") return "Vorbis";
+  if (track.format === "mp3") return "MP3";
+  return "Compressed";
 }
 
 function statusLabel(status: TrackStatus, language: Language): string {

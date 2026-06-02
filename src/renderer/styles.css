@@ -666,6 +666,11 @@ select:focus {
   background: #8a6330;
 }
 
+.badge.mp3 {
+  color: #d8f8e2;
+  background: #2f744d;
+}
+
 .format-cell {
   display: inline-flex;
   align-items: center;
