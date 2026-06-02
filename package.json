@@ -37,6 +37,7 @@
     "directories": {
       "output": "release"
     },
+    "artifactName": "${productName}.${version}.${ext}",
     "files": [
       "dist-electron/**/*",
       "dist-renderer/**/*",
