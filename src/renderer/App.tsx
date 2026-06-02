@@ -1,6 +1,6 @@
 ﻿import React, { useEffect, useId, useMemo, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
-import { BookOpen, Copy, Crosshair, FileAudio, FolderOpen, Hash, Languages, Play, Repeat, Save, Search, Square, Table2, Trash2, Upload } from "lucide-react";
+import { BookOpen, Copy, Crosshair, FileAudio, FolderOpen, Hash, Languages, Play, Redo2, Repeat, Save, Search, Square, Table2, Trash2, Undo2, Upload } from "lucide-react";
 import type { AudioFormat, DetectionResult, DetectionSettings, TrackInfo, TrackStatus, WaveformPeaks } from "../shared/types";
 import { findBestLoop } from "../shared/detectCore";
 import { formatPercent, formatSamples, formatTime, msToSample, sampleToMs } from "../shared/format";
@@ -65,6 +65,11 @@ interface ImportProgress {
   startedAtMs: number;
 }
 
+interface TrackHistoryTransaction {
+  snapshot: TrackInfo[];
+  used: boolean;
+}
+
 const defaultSettings: DetectionSettings = {
   matchWindowMs: 3000,
   matchThreshold: 95,
@@ -79,6 +84,7 @@ const detectionPresets: Record<Exclude<DetectionPreset, "custom">, Pick<Detectio
 };
 
 const customPresetStorageKey = "autolooper.customDetectionPreset.v1";
+const maxTrackHistoryEntries = 100;
 
 const uiText = {
   ja: {
@@ -91,6 +97,12 @@ const uiText = {
     autoLoopAll: "全て自動ループ",
     saveLoopedCopies: "ループ付きコピー保存",
     removeFromList: "リストから削除",
+    undo: "元に戻す",
+    redo: "やり直す",
+    undoApplied: "元に戻しました",
+    redoApplied: "やり直しました",
+    nothingToUndo: "元に戻せる編集はありません",
+    nothingToRedo: "やり直せる編集はありません",
     files: "件",
     warnings: "警告",
     errors: "エラー",
@@ -215,6 +227,12 @@ const uiText = {
     autoLoopAll: "Auto Loop All",
     saveLoopedCopies: "Save Looped Copies",
     removeFromList: "Remove from List",
+    undo: "Undo",
+    redo: "Redo",
+    undoApplied: "Undone",
+    redoApplied: "Redone",
+    nothingToUndo: "Nothing to undo",
+    nothingToRedo: "Nothing to redo",
     files: "files",
     warnings: "warnings",
     errors: "errors",
@@ -430,6 +448,11 @@ export default function App(): React.ReactElement {
   const playbackRequestRef = useRef(0);
   const checkboxSelectionDragRef = useRef<CheckboxSelectionDrag | null>(null);
   const scanCancelRequestedRef = useRef(false);
+  const tracksRef = useRef<TrackInfo[]>(demoTracks);
+  const historyPastRef = useRef<TrackInfo[][]>([]);
+  const historyFutureRef = useRef<TrackInfo[][]>([]);
+  const historyTransactionRef = useRef<TrackHistoryTransaction | null>(null);
+  const [historyCounts, setHistoryCounts] = useState({ past: 0, future: 0 });
 
   const selectedTrackId = detectionProgress?.currentTrackId ?? resolveActiveTrackId(activeTrackId, selectedIds, tracks);
   const selectedTrack = tracks.find((track) => track.id === selectedTrackId) ?? null;
@@ -443,6 +466,10 @@ export default function App(): React.ReactElement {
   const issueTracks = issuePanel === "warnings" ? warningTracks : issuePanel === "errors" ? errorTracks : [];
   const isDetecting = detectionProgress !== null;
   const isImporting = importProgress !== null;
+
+  useEffect(() => {
+    tracksRef.current = tracks;
+  }, [tracks]);
 
   useEffect(() => {
     const unsubscribeImport = window.autoLooper.onDroppedFilesImported((result) => {
@@ -534,6 +561,26 @@ export default function App(): React.ReactElement {
   }, [removableTrackIds]);
 
   useEffect(() => {
+    const handleHistoryKeyDown = (event: KeyboardEvent) => {
+      const key = event.key.toLowerCase();
+      const modifier = event.ctrlKey || event.metaKey;
+      const isUndo = modifier && !event.altKey && key === "z" && !event.shiftKey;
+      const isRedo = modifier && !event.altKey && (key === "y" || (key === "z" && event.shiftKey));
+      if (!isUndo && !isRedo) return;
+      const target = event.target;
+      if (target instanceof HTMLElement && (target.closest("input, textarea, select") || target.isContentEditable)) return;
+      event.preventDefault();
+      if (isUndo) {
+        undoTrackHistory();
+      } else {
+        redoTrackHistory();
+      }
+    };
+    window.addEventListener("keydown", handleHistoryKeyDown);
+    return () => window.removeEventListener("keydown", handleHistoryKeyDown);
+  }, [historyCounts.past, historyCounts.future, language]);
+
+  useEffect(() => {
     if (issuePanel === "warnings" && warningTracks.length === 0) setIssuePanel(null);
     if (issuePanel === "errors" && errorTracks.length === 0) setIssuePanel(null);
   }, [issuePanel, warningTracks.length, errorTracks.length]);
@@ -544,7 +591,12 @@ export default function App(): React.ReactElement {
 
   function applyImportResult(result: { tracks: TrackInfo[]; errors: string[] }): void {
     if (result.tracks.length > 0) {
-      setTracks((current) => [...current, ...result.tracks]);
+      clearTrackHistory();
+      setTracks((current) => {
+        const next = [...current, ...result.tracks];
+        tracksRef.current = next;
+        return next;
+      });
       setSelectedIds([result.tracks[0].id]);
       setActiveTrackId(result.tracks[0].id);
       void prepareWaveformPreviews(result.tracks);
@@ -584,6 +636,83 @@ export default function App(): React.ReactElement {
     setStatus(`${ui(language, "waveformReady")}: ${targets.length}`);
   }
 
+  function syncHistoryCounts(): void {
+    setHistoryCounts({
+      past: historyPastRef.current.length,
+      future: historyFutureRef.current.length
+    });
+  }
+
+  function clearTrackHistory(): void {
+    historyPastRef.current = [];
+    historyFutureRef.current = [];
+    syncHistoryCounts();
+  }
+
+  function cloneTrackHistorySnapshot(source = tracksRef.current): TrackInfo[] {
+    return source.map((track) => ({
+      ...track,
+      loop: track.loop ? { ...track.loop } : null
+    }));
+  }
+
+  function recordTrackHistory(): void {
+    const transaction = historyTransactionRef.current;
+    if (transaction?.used) return;
+    const snapshot = transaction ? transaction.snapshot : cloneTrackHistorySnapshot();
+    historyPastRef.current = [...historyPastRef.current, snapshot].slice(-maxTrackHistoryEntries);
+    historyFutureRef.current = [];
+    if (transaction) transaction.used = true;
+    syncHistoryCounts();
+  }
+
+  function runTrackHistoryTransaction(callback: () => void): void {
+    const parentTransaction = historyTransactionRef.current;
+    if (!parentTransaction) {
+      historyTransactionRef.current = {
+        snapshot: cloneTrackHistorySnapshot(),
+        used: false
+      };
+    }
+    try {
+      callback();
+    } finally {
+      if (!parentTransaction) {
+        historyTransactionRef.current = null;
+      }
+    }
+  }
+
+  function undoTrackHistory(): void {
+    const previous = historyPastRef.current.at(-1);
+    if (!previous) {
+      setStatus(ui(language, "nothingToUndo"));
+      return;
+    }
+    historyPastRef.current = historyPastRef.current.slice(0, -1);
+    historyFutureRef.current = [...historyFutureRef.current, cloneTrackHistorySnapshot()];
+    const restored = cloneTrackHistorySnapshot(previous);
+    tracksRef.current = restored;
+    setTracks(restored);
+    syncHistoryCounts();
+    setStatus(ui(language, "undoApplied"));
+  }
+
+  function redoTrackHistory(): void {
+    const next = historyFutureRef.current.at(-1);
+    if (!next) {
+      setStatus(ui(language, "nothingToRedo"));
+      return;
+    }
+    historyFutureRef.current = historyFutureRef.current.slice(0, -1);
+    historyPastRef.current = [...historyPastRef.current, cloneTrackHistorySnapshot()].slice(-maxTrackHistoryEntries);
+    const restored = cloneTrackHistorySnapshot(next);
+    tracksRef.current = restored;
+    setTracks(restored);
+    syncHistoryCounts();
+    setStatus(ui(language, "redoApplied"));
+  }
+
   function updateSettings(patch: Partial<DetectionSettings>): void {
     setSettings((current) => ({ ...current, ...patch }));
     setDetectionPreset("custom");
@@ -615,6 +744,7 @@ export default function App(): React.ReactElement {
     const results: DetectionResult[] = [];
     const startedAtMs = Date.now();
     let canceled = false;
+    clearTrackHistory();
     scanCancelRequestedRef.current = false;
     setStatus(`${ui(language, "autoLooping")}: 0/${total}`);
     try {
@@ -721,8 +851,15 @@ export default function App(): React.ReactElement {
     setStatus(`${ui(language, "saveComplete")}: ${results.filter((item) => item.status === "saved").length}/${countText(language, results.length, "savedCount")}`);
   }
 
-  function patchTrack(id: string, patch: Partial<TrackInfo>): void {
-    setTracks((current) => current.map((track) => (track.id === id ? { ...track, ...patch } : track)));
+  function patchTrack(id: string, patch: Partial<TrackInfo>, recordHistory = true): void {
+    if (recordHistory && tracksRef.current.some((track) => track.id === id)) {
+      recordTrackHistory();
+    }
+    setTracks((current) => {
+      const next = current.map((track) => (track.id === id ? { ...track, ...patch } : track));
+      tracksRef.current = next;
+      return next;
+    });
   }
 
   function removeTracks(ids: string[]): void {
@@ -732,8 +869,11 @@ export default function App(): React.ReactElement {
       stopPlayback(ui(language, "stoppedRemoved"));
     }
     setTrackContextMenu(null);
+    if (!tracksRef.current.some((track) => removeSet.has(track.id))) return;
+    recordTrackHistory();
     setTracks((current) => {
       const remaining = current.filter((track) => !removeSet.has(track.id));
+      tracksRef.current = remaining;
       setSelectedIds((currentSelected) => {
         const kept = currentSelected.filter((id) => !removeSet.has(id));
         if (kept.length > 0) return kept;
@@ -944,8 +1084,9 @@ export default function App(): React.ReactElement {
     });
   }
 
-  function moveLoopRange(track: TrackInfo, startSample: number): void {
+  function moveLoopRange(track: TrackInfo, startSample: number, recordHistory = true): void {
     if (!track.loop) return;
+    if (recordHistory) recordTrackHistory();
     const lengthSamples = track.loop.lengthSamples;
     const nextStart = clamp(Math.round(startSample), 0, Math.max(0, track.durationSamples - lengthSamples));
     const nextLoop = {
@@ -960,7 +1101,7 @@ export default function App(): React.ReactElement {
       loop: nextLoop,
       status: statusFromValidation(validation),
       validation
-    });
+    }, false);
   }
 
   function setTrackSelected(id: string, shouldSelect: boolean): void {
@@ -1107,6 +1248,22 @@ export default function App(): React.ReactElement {
         <button onClick={() => removeTracks(removableTrackIds)} disabled={removableTrackIds.length === 0 || isDetecting || isImporting}>
           <Trash2 size={18} /> {ui(language, "removeFromList")}
         </button>
+        <button
+          className="history-action"
+          onClick={undoTrackHistory}
+          disabled={historyCounts.past === 0 || isDetecting || isImporting}
+          title="Ctrl+Z"
+        >
+          <Undo2 size={18} /> {ui(language, "undo")}
+        </button>
+        <button
+          className="history-action"
+          onClick={redoTrackHistory}
+          disabled={historyCounts.future === 0 || isDetecting || isImporting}
+          title="Ctrl+Y / Ctrl+Shift+Z"
+        >
+          <Redo2 size={18} /> {ui(language, "redo")}
+        </button>
         {detectionProgress && <DetectionProgressView progress={detectionProgress} language={language} onCancel={requestDetectionCancel} />}
         {importProgress && <ImportProgressView progress={importProgress} language={language} />}
         <div className="summary">
@@ -1174,6 +1331,7 @@ export default function App(): React.ReactElement {
           patchLoopSample={patchLoopSample}
           patchLoopLength={patchLoopLength}
           moveLoopRange={moveLoopRange}
+          recordTrackHistory={recordTrackHistory}
           playingTrackId={playingTrackId}
           playbackKind={playbackKind}
           playhead={playhead}
@@ -1198,6 +1356,7 @@ export default function App(): React.ReactElement {
           patchTrack={patchTrack}
           patchLoopSample={patchLoopSample}
           patchLoopLength={patchLoopLength}
+          runTrackHistoryTransaction={runTrackHistoryTransaction}
           settings={settings}
           setSettings={updateSettings}
           detectionPreset={detectionPreset}
@@ -1605,7 +1764,8 @@ function WaveformView(props: {
   openTrackContextMenu: (track: TrackInfo, event: React.MouseEvent) => void;
   patchLoopSample: (track: TrackInfo, field: "startSample" | "endSample", value: number) => void;
   patchLoopLength: (track: TrackInfo, value: number | null, invalidInput?: string) => void;
-  moveLoopRange: (track: TrackInfo, startSample: number) => void;
+  moveLoopRange: (track: TrackInfo, startSample: number, recordHistory?: boolean) => void;
+  recordTrackHistory: () => void;
   playingTrackId: string | null;
   playbackKind: PlaybackKind | null;
   playhead: { trackId: string; sample: number } | null;
@@ -1635,6 +1795,7 @@ function WaveformView(props: {
     patchLoopSample,
     patchLoopLength,
     moveLoopRange,
+    recordTrackHistory,
     playingTrackId,
     playbackKind,
     playhead,
@@ -1678,6 +1839,7 @@ function WaveformView(props: {
               track={selectedTrack}
               playheadSample={playhead?.trackId === selectedTrack.id ? playhead.sample : null}
               moveLoopRange={moveLoopRange}
+              recordTrackHistory={recordTrackHistory}
               language={language}
               displayUnit={displayUnit}
             />
@@ -1789,12 +1951,14 @@ function WaveformCanvas({
   track,
   playheadSample,
   moveLoopRange,
+  recordTrackHistory,
   language,
   displayUnit
 }: {
   track: TrackInfo;
   playheadSample: number | null;
-  moveLoopRange: (track: TrackInfo, startSample: number) => void;
+  moveLoopRange: (track: TrackInfo, startSample: number, recordHistory?: boolean) => void;
+  recordTrackHistory: () => void;
   language: Language;
   displayUnit: DisplayUnit;
 }): React.ReactElement {
@@ -1802,7 +1966,7 @@ function WaveformCanvas({
   const height = 300;
   const svgRef = useRef<SVGSVGElement | null>(null);
   const scanGradientId = useId().replace(/:/g, "");
-  const [drag, setDrag] = useState<{ pointerId: number; pointerSample: number; startSample: number } | null>(null);
+  const [drag, setDrag] = useState<{ pointerId: number; pointerSample: number; startSample: number; historyRecorded: boolean } | null>(null);
   const durationSamples = Math.max(1, track.durationSamples);
   const channels = track.waveform?.channels.slice(0, 2) ?? [];
   const points = channels[0]?.min.length ?? 0;
@@ -1833,7 +1997,8 @@ function WaveformCanvas({
     setDrag({
       pointerId: event.pointerId,
       pointerSample: sampleFromPointer(event),
-      startSample: track.loop.startSample
+      startSample: track.loop.startSample,
+      historyRecorded: false
     });
   }
 
@@ -1842,7 +2007,11 @@ function WaveformCanvas({
     if (drag.pointerId !== event.pointerId) return;
     event.preventDefault();
     const deltaSamples = sampleFromPointer(event) - drag.pointerSample;
-    moveLoopRange(track, drag.startSample + deltaSamples);
+    if (deltaSamples !== 0 && !drag.historyRecorded) {
+      recordTrackHistory();
+      setDrag({ ...drag, historyRecorded: true });
+    }
+    moveLoopRange(track, drag.startSample + deltaSamples, false);
   }
 
   function handlePointerUp(event: React.PointerEvent<SVGSVGElement>): void {
@@ -1852,11 +2021,13 @@ function WaveformCanvas({
 
   function handleLoopMouseDown(event: React.MouseEvent<SVGRectElement>): void {
     if (!track.loop) return;
+    if (drag) return;
     event.preventDefault();
     setDrag({
       pointerId: -1,
       pointerSample: sampleFromMouse(event),
-      startSample: track.loop.startSample
+      startSample: track.loop.startSample,
+      historyRecorded: false
     });
   }
 
@@ -1864,7 +2035,11 @@ function WaveformCanvas({
     if (!drag || drag.pointerId !== -1 || !track.loop) return;
     event.preventDefault();
     const deltaSamples = sampleFromMouse(event) - drag.pointerSample;
-    moveLoopRange(track, drag.startSample + deltaSamples);
+    if (deltaSamples !== 0 && !drag.historyRecorded) {
+      recordTrackHistory();
+      setDrag({ ...drag, historyRecorded: true });
+    }
+    moveLoopRange(track, drag.startSample + deltaSamples, false);
   }
 
   function handleMouseUp(): void {
@@ -2078,6 +2253,7 @@ function ListEditorView(props: {
   patchTrack: (id: string, patch: Partial<TrackInfo>) => void;
   patchLoopSample: (track: TrackInfo, field: "startSample" | "endSample", value: number) => void;
   patchLoopLength: (track: TrackInfo, value: number | null, invalidInput?: string) => void;
+  runTrackHistoryTransaction: (callback: () => void) => void;
   settings: DetectionSettings;
   setSettings: (settings: DetectionSettings) => void;
   detectionPreset: DetectionPreset;
@@ -2118,11 +2294,13 @@ function ListEditorView(props: {
   }
 
   function pasteText(text: string): void {
-    if (cellSelection) {
-      applyCellRangeTsv(text, cellSelection, visible, orderedColumns, props.displayUnit, props.patchTrack, props.settings);
-      return;
-    }
-    applyTsv(text, props.allTracks, props.displayUnit, props.patchLoopSample, props.patchLoopLength);
+    props.runTrackHistoryTransaction(() => {
+      if (cellSelection) {
+        applyCellRangeTsv(text, cellSelection, visible, orderedColumns, props.displayUnit, props.patchTrack, props.settings);
+        return;
+      }
+      applyTsv(text, props.allTracks, props.displayUnit, props.patchLoopSample, props.patchLoopLength);
+    });
   }
 
   function moveColumn(source: ListColumnKey, target: ListColumnKey): void {
