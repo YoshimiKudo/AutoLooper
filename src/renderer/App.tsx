@@ -2,7 +2,7 @@
 import { createRoot } from "react-dom/client";
 import { BookOpen, Copy, Crosshair, FileAudio, FolderOpen, Hash, Languages, Play, Redo2, Repeat, Save, Search, Square, Table2, Trash2, Undo2, Upload } from "lucide-react";
 import type { AudioFormat, DetectionResult, DetectionSettings, TrackInfo, TrackStatus, WaveformPeaks } from "../shared/types";
-import { findBestLoop } from "../shared/detectCore";
+import type { LoopCandidate } from "../shared/detectCore";
 import { formatPercent, formatSamples, formatTime, msToSample, sampleToMs } from "../shared/format";
 import "./styles.css";
 
@@ -1645,6 +1645,8 @@ function renderInlineMarkdown(text: string): React.ReactNode[] {
 }
 
 let audioContext: AudioContext | null = null;
+let detectWorker: Worker | null = null;
+let detectWorkerRequestId = 0;
 
 function usesWebAudioDetection(format: AudioFormat): boolean {
   return format === "ogg" || format === "mp3";
@@ -1654,8 +1656,8 @@ async function detectWithWebAudio(track: TrackInfo, settings: DetectionSettings)
   try {
     const decoded = await decodeAudioTrack(track);
     const mono = downmixAudioBuffer(decoded);
-    const candidate = findBestLoop(mono, decoded.sampleRate, settings, track.loop);
     const patch = decodedTrackPatch(decoded);
+    const candidate = await findBestLoopInWorker(mono, decoded.sampleRate, settings, track.loop);
 
     if (!candidate) {
       return {
@@ -1696,6 +1698,45 @@ async function detectWithWebAudio(track: TrackInfo, settings: DetectionSettings)
       }
     };
   }
+}
+
+function getDetectWorker(): Worker {
+  detectWorker ??= new Worker(new URL("./detectWorker.ts", import.meta.url), { type: "module" });
+  return detectWorker;
+}
+
+function findBestLoopInWorker(
+  mono: Float32Array,
+  sampleRate: number,
+  settings: DetectionSettings,
+  metadataLoop: TrackInfo["loop"]
+): Promise<LoopCandidate | null> {
+  const worker = getDetectWorker();
+  const requestId = `detect-${detectWorkerRequestId += 1}`;
+  return new Promise((resolve, reject) => {
+    const cleanup = () => {
+      worker.removeEventListener("message", handleMessage);
+      worker.removeEventListener("error", handleError);
+    };
+    const handleMessage = (event: MessageEvent<{ requestId: string; candidate: LoopCandidate | null; error?: string }>) => {
+      if (event.data.requestId !== requestId) return;
+      cleanup();
+      if (event.data.error) {
+        reject(new Error(event.data.error));
+        return;
+      }
+      resolve(event.data.candidate);
+    };
+    const handleError = (event: ErrorEvent) => {
+      cleanup();
+      detectWorker?.terminate();
+      detectWorker = null;
+      reject(new Error(event.message || "Loop detection worker failed."));
+    };
+    worker.addEventListener("message", handleMessage);
+    worker.addEventListener("error", handleError);
+    worker.postMessage({ requestId, mono, sampleRate, settings, metadataLoop }, [mono.buffer]);
+  });
 }
 
 async function decodeTrackPreview(track: TrackInfo): Promise<Partial<TrackInfo>> {
