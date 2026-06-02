@@ -1,10 +1,11 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 import crypto from "node:crypto";
-import type { ImportResult, SaveResult, TrackInfo } from "../../shared/types.js";
+import type { ImportResult, SaveOptions, SaveResult, TrackInfo } from "../../shared/types.js";
 import { parseAiff, writeAiffLoop } from "../audio/aiff.js";
+import { parseFlac, writeFlacLoop } from "../audio/flac.js";
 import { parseMp3 } from "../audio/mp3.js";
-import { parseOggVorbis, writeOggVorbisLoop } from "../audio/ogg.js";
+import { parseOggOpus, parseOggVorbis, writeOggOpusLoop, writeOggVorbisLoop } from "../audio/ogg.js";
 import { parseWav, writeWavLoop } from "../audio/wav.js";
 import { readLimitedAudioFile } from "./limits.js";
 
@@ -28,7 +29,11 @@ export async function importAudioFiles(filePaths: string[]): Promise<ImportResul
               ? parseOggVorbis(buffer)
               : ext === ".mp3"
                 ? parseMp3(buffer)
-                : null;
+                : ext === ".flac"
+                  ? parseFlac(buffer)
+                  : ext === ".opus"
+                    ? parseOggOpus(buffer)
+                    : null;
 
       if (!parsed) {
         errors.push(`${filePath}: unsupported file type`);
@@ -60,21 +65,22 @@ export async function importAudioFiles(filePaths: string[]): Promise<ImportResul
   return { tracks, errors };
 }
 
-export async function saveLoopedCopy(track: TrackInfo): Promise<SaveResult> {
+export async function saveLoopedCopy(track: TrackInfo, options: SaveOptions = defaultSaveOptions): Promise<SaveResult> {
   if (!track.loop) {
     return {
       id: track.id,
-      outputPath: track.outputPath,
+      outputPath: makeLoopedOutputPath(track.filePath, options),
       status: "error",
       validation: "No loop marker is set."
     };
   }
 
   try {
+    const intendedOutputPath = makeLoopedOutputPath(track.filePath, options);
     if (track.format === "mp3") {
       return {
         id: track.id,
-        outputPath: track.outputPath,
+        outputPath: intendedOutputPath,
         status: "warning",
         validation: mp3LoopEmbeddingUnsupported
       };
@@ -86,29 +92,43 @@ export async function saveLoopedCopy(track: TrackInfo): Promise<SaveResult> {
         ? writeWavLoop(input, track.loop)
         : track.format === "aiff"
           ? writeAiffLoop(input, track.loop)
-          : writeOggVorbisLoop(input, track.loop);
+          : track.format === "ogg"
+            ? writeOggVorbisLoop(input, track.loop)
+            : track.format === "flac"
+              ? writeFlacLoop(input, track.loop)
+              : writeOggOpusLoop(input, track.loop);
 
-    const outputPath = await nextAvailablePath(makeLoopedOutputPath(track.filePath));
+    const outputPath = await nextAvailablePath(intendedOutputPath);
     await fs.writeFile(outputPath, output);
+    const validation =
+      outputPath === intendedOutputPath
+        ? `Saved ${path.basename(outputPath)}.`
+        : `Saved ${path.basename(outputPath)} because ${path.basename(intendedOutputPath)} already exists.`;
     return {
       id: track.id,
       outputPath,
       status: "saved",
-      validation: `Saved ${path.basename(outputPath)}.`
+      validation
     };
   } catch (error) {
     return {
       id: track.id,
-      outputPath: track.outputPath,
+      outputPath: makeLoopedOutputPath(track.filePath, options),
       status: "error",
       validation: error instanceof Error ? error.message : String(error)
     };
   }
 }
 
-function makeLoopedOutputPath(filePath: string): string {
+const defaultSaveOptions: SaveOptions = {
+  outputDirectory: null,
+  filenameSuffix: "_looped"
+};
+
+export function makeLoopedOutputPath(filePath: string, options: SaveOptions = defaultSaveOptions): string {
   const parsed = path.parse(filePath);
-  return path.join(parsed.dir, `${parsed.name}_looped${parsed.ext}`);
+  const outputDirectory = options.outputDirectory || parsed.dir;
+  return path.join(outputDirectory, `${parsed.name}${options.filenameSuffix}${parsed.ext}`);
 }
 
 async function nextAvailablePath(filePath: string): Promise<string> {

@@ -1,5 +1,5 @@
 import type { DetectionResult, DetectionSettings, LoopMarker, TrackInfo } from "../../shared/types.js";
-import { findBestLoop } from "../../shared/detectCore.js";
+import { findBestLoop, findBestLoopDeep } from "../../shared/detectCore.js";
 import { decodeAiff } from "../audio/aiff.js";
 import { decodeWav } from "../audio/wav.js";
 import { downmixMono } from "../audio/waveform.js";
@@ -18,13 +18,15 @@ export async function detectTrackLoop(track: TrackInfo, settings: DetectionSetti
       };
     }
     const mono = downmixMono(decoded.pcm);
-    const candidate = findBestLoop(mono, decoded.sampleRate, settings, decoded.loop);
+    const candidate = settings.mode === "deep"
+      ? findBestLoopDeep(mono, decoded.sampleRate, settings, decoded.loop)
+      : findBestLoop(mono, decoded.sampleRate, settings, decoded.loop);
     if (!candidate) {
       return {
         id: track.id,
         loop: null,
         status: "no-loop",
-        validation: `No loop candidate reached ${settings.matchThreshold}%.`
+        validation: `No ${settings.mode === "deep" ? "Deep " : ""}loop candidate reached ${settings.matchThreshold}%.`
       };
     }
 
@@ -40,7 +42,7 @@ export async function detectTrackLoop(track: TrackInfo, settings: DetectionSetti
       id: track.id,
       loop,
       status,
-      validation: `Detected at ${candidate.confidence.toFixed(1)}%.`
+      validation: `Detected${settings.mode === "deep" ? " with Deep" : ""} at ${candidate.confidence.toFixed(1)}%.`
     };
   } catch (error) {
     return {

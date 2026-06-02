@@ -1,8 +1,8 @@
-import { app, BrowserWindow, dialog, ipcMain, session } from "electron";
-import type { OpenDialogOptions } from "electron";
+import { app, BrowserWindow, dialog, ipcMain, Menu, session, shell } from "electron";
+import type { MenuItemConstructorOptions, OpenDialogOptions } from "electron";
 import fs from "node:fs/promises";
 import path from "node:path";
-import type { DetectionSettings, ImportResult, LoopMarker, TrackInfo } from "../shared/types.js";
+import type { DetectionSettings, ImportResult, LoopMarker, SaveOptions, TrackInfo } from "../shared/types.js";
 import { detectTrackLoop } from "./services/detect.js";
 import { importAudioFiles, saveLoopedCopy } from "./services/files.js";
 import { readLimitedAudioFile } from "./services/limits.js";
@@ -12,6 +12,7 @@ const devServerUrl = "http://127.0.0.1:5173";
 const appIconPath = path.join(app.getAppPath(), "build", "icon.ico");
 const importedTracks = new Map<string, TrackInfo>();
 const importedFilePaths = new Set<string>();
+const savedOutputPaths = new Set<string>();
 
 app.enableSandbox();
 
@@ -58,6 +59,7 @@ app.whenReady().then(() => {
   session.defaultSession.setPermissionRequestHandler((_webContents, _permission, callback) => {
     callback(false);
   });
+  createApplicationMenu();
 
   ipcMain.handle("tracks:import", async (event) => {
     const parentWindow = BrowserWindow.fromWebContents(event.sender) ?? undefined;
@@ -65,7 +67,7 @@ app.whenReady().then(() => {
       title: "Import audio files",
       properties: ["openFile", "multiSelections"],
       filters: [
-        { name: "Audio", extensions: ["wav", "aif", "aiff", "ogg", "mp3"] },
+        { name: "Audio", extensions: ["wav", "aif", "aiff", "ogg", "mp3", "flac", "opus"] },
         { name: "All Files", extensions: ["*"] }
       ]
     };
@@ -88,11 +90,11 @@ app.whenReady().then(() => {
     const supportedPaths = filePaths.filter((filePath): filePath is string => {
       if (typeof filePath !== "string") return false;
       const ext = path.extname(filePath).toLowerCase();
-      return ext === ".wav" || ext === ".aif" || ext === ".aiff" || ext === ".ogg" || ext === ".mp3";
+      return ext === ".wav" || ext === ".aif" || ext === ".aiff" || ext === ".ogg" || ext === ".mp3" || ext === ".flac" || ext === ".opus";
     });
 
     if (supportedPaths.length === 0) {
-      return { tracks: [], errors: ["Drop WAV, AIFF, AIF, OGG, or MP3 files."] };
+      return { tracks: [], errors: ["Drop WAV, AIFF, AIF, OGG, MP3, FLAC, or OPUS files."] };
     }
 
     return rememberImportedTracks(await importAudioFiles(supportedPaths));
@@ -129,9 +131,19 @@ app.whenReady().then(() => {
     return buffer.buffer.slice(buffer.byteOffset, buffer.byteOffset + buffer.byteLength);
   });
 
-  ipcMain.handle("tracks:save-looped", async (_event, tracks: unknown) => {
+  ipcMain.handle("tracks:save-looped", async (_event, tracks: unknown, options: Partial<SaveOptions> | undefined) => {
     if (!Array.isArray(tracks)) {
       return [];
+    }
+
+    const safeOptions = sanitizeSaveOptions(options);
+    if (!safeOptions.ok) {
+      return tracks.map((track) => ({
+        id: getTrackId(track),
+        outputPath: "",
+        status: "error",
+        validation: safeOptions.error
+      }));
     }
 
     const results = [];
@@ -146,9 +158,32 @@ app.whenReady().then(() => {
         });
         continue;
       }
-      results.push(await saveLoopedCopy(resolution.track));
+      const result = await saveLoopedCopy(resolution.track, safeOptions.options);
+      if (result.status === "saved" && result.outputPath) {
+        savedOutputPaths.add(normalizeFilePath(result.outputPath));
+      }
+      results.push(result);
     }
     return results;
+  });
+
+  ipcMain.handle("app:select-output-directory", async (event) => {
+    const parentWindow = BrowserWindow.fromWebContents(event.sender) ?? undefined;
+    const result = parentWindow
+      ? await dialog.showOpenDialog(parentWindow, { title: "Select output folder", properties: ["openDirectory"] })
+      : await dialog.showOpenDialog({ title: "Select output folder", properties: ["openDirectory"] });
+    return result.canceled ? null : result.filePaths[0] ?? null;
+  });
+
+  ipcMain.handle("app:open-saved-folder", async (_event, outputPath: unknown) => {
+    if (typeof outputPath !== "string") {
+      throw new Error("Saved output path is invalid.");
+    }
+    const normalized = normalizeFilePath(outputPath);
+    if (!savedOutputPaths.has(normalized)) {
+      throw new Error("Only folders for files saved in this session can be opened.");
+    }
+    return shell.openPath(path.dirname(outputPath));
   });
 
   ipcMain.handle("app:get-readme", async () => {
@@ -163,6 +198,62 @@ app.whenReady().then(() => {
     }
   });
 });
+
+function createApplicationMenu(): void {
+  const template: MenuItemConstructorOptions[] = [
+    {
+      label: "File",
+      submenu: [
+        {
+          label: "Save Settings...",
+          click: () => sendRendererMenuEvent("app:open-save-settings")
+        },
+        { type: "separator" },
+        process.platform === "darwin" ? { role: "close" } : { role: "quit" }
+      ]
+    },
+    {
+      label: "Edit",
+      submenu: [
+        { role: "undo" },
+        { role: "redo" },
+        { type: "separator" },
+        { role: "cut" },
+        { role: "copy" },
+        { role: "paste" },
+        { role: "selectAll" }
+      ]
+    },
+    {
+      label: "View",
+      submenu: [
+        { role: "reload" },
+        { role: "forceReload" },
+        { role: "toggleDevTools" },
+        { type: "separator" },
+        { role: "resetZoom" },
+        { role: "zoomIn" },
+        { role: "zoomOut" },
+        { type: "separator" },
+        { role: "togglefullscreen" }
+      ]
+    },
+    {
+      label: "Window",
+      submenu: [
+        { role: "minimize" },
+        { role: "close" }
+      ]
+    }
+  ];
+
+  Menu.setApplicationMenu(Menu.buildFromTemplate(template));
+}
+
+function sendRendererMenuEvent(channel: string): void {
+  const target = BrowserWindow.getFocusedWindow() ?? BrowserWindow.getAllWindows()[0];
+  target?.webContents.send(channel);
+}
 
 app.on("window-all-closed", () => {
   if (process.platform !== "darwin") {
@@ -287,10 +378,32 @@ function getTrackId(track: unknown): string {
 
 function sanitizeDetectionSettings(settings: Partial<DetectionSettings> | undefined): DetectionSettings {
   return {
-    matchWindowMs: clampNumber(settings?.matchWindowMs, 100, 30000, 3000),
-    matchThreshold: clampNumber(settings?.matchThreshold, 1, 100, 95),
+    mode: settings?.mode === "deep" ? "deep" : "normal",
+    matchWindowMs: clampNumber(settings?.matchWindowMs, 100, 30000, 1500),
+    matchThreshold: clampNumber(settings?.matchThreshold, 1, 100, 88),
     minimumLoopMs: clampNumber(settings?.minimumLoopMs, 100, 600000, 3000),
     loopCheckPrerollMs: clampNumber(settings?.loopCheckPrerollMs, 0, 30000, 1000)
+  };
+}
+
+function sanitizeSaveOptions(options: Partial<SaveOptions> | undefined): { ok: true; options: SaveOptions } | { ok: false; error: string } {
+  const filenameSuffix = typeof options?.filenameSuffix === "string" ? options.filenameSuffix.trim() : "_looped";
+  if (/[\x00-\x1f\\/:*?"<>|]/.test(filenameSuffix)) {
+    return { ok: false, error: 'Filename suffix cannot contain \\ / : * ? " < > | or control characters.' };
+  }
+  if (filenameSuffix.length > 80) {
+    return { ok: false, error: "Filename suffix is too long." };
+  }
+  const outputDirectory =
+    typeof options?.outputDirectory === "string" && options.outputDirectory.trim()
+      ? path.resolve(options.outputDirectory)
+      : null;
+  return {
+    ok: true,
+    options: {
+      outputDirectory,
+      filenameSuffix
+    }
   };
 }
 

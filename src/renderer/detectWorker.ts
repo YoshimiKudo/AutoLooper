@@ -1,4 +1,4 @@
-import { findBestLoop, type LoopCandidate } from "../shared/detectCore";
+import { findBestLoop, findBestLoopDeep, type LoopCandidate } from "../shared/detectCore";
 import type { DetectionSettings, LoopMarker } from "../shared/types";
 
 interface DetectWorkerRequest {
@@ -18,7 +18,9 @@ interface DetectWorkerResponse {
 self.addEventListener("message", (event: MessageEvent<DetectWorkerRequest>) => {
   const { requestId, mono, sampleRate, settings, metadataLoop } = event.data;
   try {
-    const candidate = findBestLoop(mono, sampleRate, settings, metadataLoop);
+    const candidate = settings.mode === "deep"
+      ? findBestLoopDeep(mono, sampleRate, settings, metadataLoop)
+      : findBestLoop(mono, sampleRate, settings, metadataLoop);
     self.postMessage({ requestId, candidate } satisfies DetectWorkerResponse);
   } catch (error) {
     self.postMessage({

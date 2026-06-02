@@ -2,214 +2,226 @@
 
 ## Download / ダウンロード
 
-**Windows版アプリ本体:** [AutoLooper.0.2.0.exe](https://github.com/YoshimiKudo/AutoLooper/releases/download/v0.2.0-beta/AutoLooper.0.2.0.exe)
+**Windows版アプリ本体**: [AutoLooper.0.3.0.exe](https://github.com/YoshimiKudo/AutoLooper/releases/download/v0.3.0-beta/AutoLooper.0.3.0.exe)
 
 最新版のリリースページ: [AutoLooper Releases](https://github.com/YoshimiKudo/AutoLooper/releases)
 
-Download the latest Windows portable exe from the link above.
+The latest Windows portable exe is available from the link above.
+
+---
 
 ## 日本語
 
-AutoLooper は、ゲーム音楽向けのループマーカー検出・編集デスクトップアプリです。WAV、AIFF、Ogg Vorbis、MP3 ファイルを読み込み、最良のループ候補を自動採用し、波形表示とリストエディタの両方で確認・編集できます。
+AutoLooper は、ゲーム音楽向けのループマーカー検出・編集デスクトップアプリです。音声ファイルを読み込み、自動検出したループ候補をマーカーとして採用し、波形ビューとリスト編集ビューで確認・編集できます。
 
 ### バージョン情報
 
-- アプリバージョン: `0.2.0`
-- リリースタグ: `v0.2.0-beta`
-- リリース日: `2026-06-02` JST
-- リリース種別: ベータ / プレリリース
-- 現在の主な対象環境: Windows
-- macOS 対応は将来予定です。
+- アプリバージョン: `0.3.0`
+- リリースタグ: `v0.3.0-beta`
+- リリース日: `2026-06-03` JST
+- 種別: ベータ / プレリリース
+- 対応環境: Windows
+- macOS は将来対応予定です。
+
+### 対応形式
+
+- `.wav`
+- `.aif` / `.aiff`
+- `.ogg`（Ogg Vorbis）
+- `.mp3`
+- `.flac`
+- `.opus`（Ogg Opus）
+
+### ループマーカー保存
+
+- WAV: `smpl` メタデータへ書き込み
+- AIFF: `MARK` / `INST` メタデータへ書き込み
+- Ogg Vorbis: Vorbis Comment へ `LOOPSTART` / `LOOPEND` / `LOOPLENGTH` を書き込み
+- FLAC: Vorbis Comment へ `LOOPSTART` / `LOOPEND` / `LOOPLENGTH` を書き込み
+- Opus: OpusTags へ `LOOPSTART` / `LOOPEND` / `LOOPLENGTH` を書き込み
+- MP3: AutoLooper内ではループマーカーを設定できますが、MP3ファイル自体への埋め込み保存には対応していません。保存確認時に警告を表示します。
+
+FLAC / Opus のループ情報はメタデータとして保存できますが、外部プレイヤーやゲームエンジンがそのタグをループ再生に使うかどうかは環境依存です。
 
 ### 主な機能
 
-- `.wav`、`.aif`、`.aiff`、`.ogg`、`.mp3` の読み込み
-- Ogg は Vorbis を対象
-- MP3 は読み込み、波形表示、自動検出、手動マーカー編集、ループ再生に対応
-- MP3 へのループマーカー埋め込み保存は非対応。保存時に警告を表示
-- 複数ファイルの一括読み込みと一括検出
-- 最良候補を自動採用するループ検出
+- 複数音声ファイルの一括読み込み
+- 選択ファイルまたは全ファイルの自動ループ検出
+- `Normal / Deep / Custom` の検出モード
+- `Normal`: 波形一致を中心にした通常検出
+- `Deep`: ビート位置と音量差も考慮する精密検出
+- `Custom`: 検出方式とパラメータを保存して再利用
+- 検出中の進捗表示、経過秒数表示、中止操作
+- Deep Scan 専用の控えめなスキャンアニメーション
 - 波形上のループ開始・終了マーカー表示
-- 波形上でループ区間をドラッグして平行移動
-- ループ開始、ループ終了、ループ長の編集
-- サンプル数表示と秒数表示の切り替え
-- リストエディタでのソート、列並び替え、矩形範囲コピー
-- 検出プリセット: `High / Mid / Low / Custom`
-- カスタム検出プリセットの保存
-- `_looped.wav` のような別名コピー保存
-- WAV / AIFF / Ogg ファイルへのループメタデータ書き込み
+- ループ区間のドラッグ移動
+- 通常再生時も `Loop End` から `Loop Start` へ戻るループ再生
+- `Check Loop` によるループ継ぎ目確認
+- ループ開始、ループ終了、ループ長の数値編集
+- サンプル数表示 / 秒数表示の切り替え
+- リスト編集ビューでのソート、列並び替え、範囲コピー&ペースト
+- チェックセルのクリック/ドラッグによる複数選択
+- 保存前確認ダイアログ
+- 保存先フォルダとファイル名追加文字の設定
+- 同名ファイルがある場合の自動ナンバリング保存
+- 保存結果ダイアログと保存先フォルダを開く機能
+- Undo / Redo
+- 日本語 / 英語表示切り替え
 
-### 検出設定
+### 保存仕様
 
-- 照合区間: ループ候補の比較に使う音声区間の長さ
-- 必要一致率: 候補を採用するために必要な最低スコア
-- 最短ループ: これより短い候補を無視する下限
-- ループ確認開始位置: `Loop End` の何 ms 前から再生確認を始めるか
+保存は元ファイルを直接上書きせず、別名コピーとして保存します。初期設定では元ファイルと同じフォルダに `_looped` を付加して保存します。
 
-`Custom` プリセットは現在の検出設定を保存します。保存値はアプリ内のローカルストレージに保持されます。
+例:
 
-### 再生とループ確認
+- `battle.wav`
+- `battle_looped.wav`
 
-通常の再生では、ループマーカーがあるトラックの場合、先頭から再生し、`Loop End` に到達すると `Loop Start` へ戻って再生を継続します。ループマーカーがないトラックは通常どおり最後まで再生します。
+同名ファイルが既に存在する場合は、自動で番号を付けて保存します。
 
-`Check Loop` は、ループマーカーがあるトラックでのみ有効です。`Loop End` の指定 ms 前から再生し、`Loop End` に到達すると `Loop Start` へ戻って再生を継続します。停止するまでループを繰り返します。
+例:
+
+- `battle_looped.wav` が既にある場合
+- `battle_looped_2.wav` として保存
+
+保存結果ダイアログでは、番号付き保存を行った理由も表示します。
+
+### 保存設定
+
+保存先フォルダとファイル名に追加する文字は、メニューバーの `File > Save Settings...` から設定できます。保存確認ダイアログ内でも、保存直前に保存先と追加文字を変更できます。
+
+### Windows SmartScreen について
+
+現在のベータ版 exe はコード署名されていません。初回起動時に Windows Defender SmartScreen の「Windows によって PC が保護されました」または「不明な発行元」の警告が表示される場合があります。
+
+公式配布は GitHub Releases のみです。ダウンロード先がこのリポジトリの Release であることを確認してください。
+
+警告画面から起動する場合:
+
+1. `詳細情報` を選択
+2. `実行` を選択
+
+会社PCや Smart App Control が有効な環境では、組織のセキュリティ設定により実行できない場合があります。
 
 ### 開発用起動
-
-CMD:
 
 ```bat
 cd /d <path-to-AutoLooper>
 npm.cmd run dev
 ```
 
-PowerShell:
-
-```powershell
-Set-Location "<path-to-AutoLooper>"
-npm.cmd run dev
-```
-
-### ビルドとテスト
+### ビルド
 
 ```bat
 npm.cmd run build
-npm.cmd test
-```
-
-### exe 生成
-
-unpacked 版:
-
-```bat
-npm.cmd run dist:dir
-```
-
-portable exe:
-
-```bat
 npm.cmd run dist
 ```
-
-生成物は `release` フォルダに出力されます。
-
-### 注意
-
-- 自動保存は行いません。保存操作を実行したときだけ、ループ付きコピーを書き出します。
-- MP3 はループマーカーのアプリ内利用には対応しますが、MP3ファイル自体への埋め込み保存には対応しません。
-- ループ長などに無効な値を入力すると、トラック状態が警告になり、検証欄に理由が表示されます。
-- 現在の開発・検証環境は Windows です。macOS 対応は将来想定です。
-
-### サポートと連絡先
-
-- バグ報告や改善要望は GitHub Issues を使う想定です。
-- 公式サイト: https://yoshimi-kudo.com/
-- X: https://x.com/yoshimikudo
-
-### ライセンス
-
-ライセンス方針は未確定です。再利用条件を明確にする必要がある場合は、LICENSE ファイルを追加してください。
 
 ---
 
 ## English
 
-AutoLooper is a desktop app for detecting and editing loop markers in game music files. It imports WAV, AIFF, Ogg Vorbis, and MP3 files, automatically adopts the best loop candidate, and lets you review and edit loop points in both waveform and list editor views.
+AutoLooper is a desktop app for detecting, editing, previewing, and saving loop markers for game music files.
 
 ### Version
 
-- App version: `0.2.0`
-- Release tag: `v0.2.0-beta`
-- Release date: `2026-06-02` JST
-- Release type: beta / prerelease
-- Primary current target: Windows
-- macOS support is planned for a future release.
+- App version: `0.3.0`
+- Release tag: `v0.3.0-beta`
+- Release date: `2026-06-03` JST
+- Type: beta / pre-release
+- Target platform: Windows
+- macOS support is planned for the future.
+
+### Supported Formats
+
+- `.wav`
+- `.aif` / `.aiff`
+- `.ogg` (Ogg Vorbis)
+- `.mp3`
+- `.flac`
+- `.opus` (Ogg Opus)
+
+### Loop Marker Saving
+
+- WAV: writes to `smpl` metadata
+- AIFF: writes to `MARK` / `INST` metadata
+- Ogg Vorbis: writes `LOOPSTART` / `LOOPEND` / `LOOPLENGTH` to Vorbis Comment
+- FLAC: writes `LOOPSTART` / `LOOPEND` / `LOOPLENGTH` to Vorbis Comment
+- Opus: writes `LOOPSTART` / `LOOPEND` / `LOOPLENGTH` to OpusTags
+- MP3: loop markers can be edited inside AutoLooper, but cannot be embedded into MP3 files. A warning is shown before saving.
+
+FLAC and Opus loop markers are stored as metadata. Whether external players or game engines use those tags for loop playback depends on the target environment.
 
 ### Features
 
-- Import `.wav`, `.aif`, `.aiff`, `.ogg`, and `.mp3` files
-- Ogg support targets Vorbis
-- MP3 supports import, waveform display, automatic detection, manual marker editing, and loop playback
-- MP3 loop marker embedding is not supported. The app shows a warning when saving MP3 tracks
-- Batch import and batch detection
-- Automatic adoption of the best loop candidate
-- Waveform display with loop start and loop end markers
-- Drag-to-shift loop ranges on the waveform
-- Edit loop start, loop end, and loop length
-- Toggle display between samples and time
-- List editor with sorting, column reordering, and rectangular cell copy
-- Detection presets: `High / Mid / Low / Custom`
-- Saved custom detection preset
-- Save looped copies using names such as `_looped.wav`
-- Write loop metadata into WAV / AIFF / Ogg files
+- Batch import for multiple audio files
+- Auto loop detection for selected files or all files
+- Detection modes: `Normal / Deep / Custom`
+- `Normal`: fast waveform-similarity based detection
+- `Deep`: more detailed detection using beat-like positions and loudness differences
+- `Custom`: saves detection mode and parameters
+- Detection progress, elapsed time, and cancellation
+- Subtle Deep Scan animation
+- Waveform loop start/end marker display
+- Dragging loop ranges on the waveform
+- Normal playback loops from `Loop End` back to `Loop Start`
+- `Check Loop` playback for checking loop seams
+- Numeric editing for loop start, loop end, and loop length
+- Sample/time display switching
+- List editor sorting, column reordering, and Excel-like range copy/paste
+- Multi-select by clicking or dragging the selection cell
+- Save confirmation dialog
+- Output folder and filename suffix settings
+- Automatic numbering when the output filename already exists
+- Save result dialog and open saved folder action
+- Undo / Redo
+- Japanese / English UI switching
 
-### Detection Settings
+### Save Behavior
 
-- Match Window: Audio duration used to compare loop candidates
-- Required Match: Minimum score required to accept a candidate
-- Minimum Loop: Shortest allowed loop length
-- Loop Check Preroll: How many ms before `Loop End` playback starts when checking the loop
+AutoLooper does not overwrite the original file. It saves a separate copy. By default, the output is saved beside the source file with `_looped` added to the filename.
 
-The `Custom` preset saves the current detection settings. Saved values are stored in the app's local storage.
+Example:
 
-### Playback and Loop Check
+- `battle.wav`
+- `battle_looped.wav`
 
-During normal playback, tracks with loop markers play from the beginning and jump from `Loop End` back to `Loop Start`. Tracks without loop markers play through to the end.
+If the output name already exists, AutoLooper automatically saves with a numbered filename.
 
-`Check Loop` is enabled only for tracks with loop markers. Playback starts shortly before `Loop End`, jumps back to `Loop Start` when it reaches `Loop End`, and continues looping until stopped.
+Example:
+
+- If `battle_looped.wav` already exists
+- AutoLooper saves `battle_looped_2.wav`
+
+The save result dialog reports when automatic numbering was used.
+
+### Save Settings
+
+The output folder and filename suffix can be configured from `File > Save Settings...`. They can also be changed directly in the save confirmation dialog before saving.
+
+### Windows SmartScreen
+
+The current beta exe is not code-signed. Windows Defender SmartScreen may show an unknown publisher warning on first launch.
+
+Official downloads are provided only through GitHub Releases. Confirm that the download is from this repository's release page.
+
+To launch from the warning dialog:
+
+1. Select `More info`
+2. Select `Run anyway`
+
+Company-managed PCs or environments with Smart App Control may block unsigned apps depending on their security policy.
 
 ### Development
-
-CMD:
 
 ```bat
 cd /d <path-to-AutoLooper>
 npm.cmd run dev
 ```
 
-PowerShell:
-
-```powershell
-Set-Location "<path-to-AutoLooper>"
-npm.cmd run dev
-```
-
-### Build and Test
+### Build
 
 ```bat
 npm.cmd run build
-npm.cmd test
-```
-
-### Build Executables
-
-Unpacked app:
-
-```bat
-npm.cmd run dist:dir
-```
-
-Portable exe:
-
-```bat
 npm.cmd run dist
 ```
-
-Build outputs are written to the `release` folder.
-
-### Notes
-
-- The app does not autosave. Looped copies are written only when the save action is executed.
-- MP3 markers can be used inside the app, but cannot be embedded back into MP3 files.
-- Invalid loop length input sets the track status to warning and shows the reason in the validation column.
-- macOS support is planned for the future. Current development and verification are on Windows.
-
-### Support and Contact
-
-- Bug reports and feature requests are expected to be handled through GitHub Issues.
-- Official website: https://yoshimi-kudo.com/
-- X: https://x.com/yoshimikudo
-
-### License
-
-The license policy has not been decided yet. Add a LICENSE file before publishing reuse terms.

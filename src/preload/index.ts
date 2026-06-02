@@ -1,9 +1,10 @@
 import { contextBridge, ipcRenderer, webUtils } from "electron";
-import type { DetectionResult, DetectionSettings, ImportResult, SaveResult, TrackInfo } from "../shared/types.js";
+import type { DetectionResult, DetectionSettings, ImportResult, SaveOptions, SaveResult, TrackInfo } from "../shared/types.js";
 
 type DropImportCallback = (result: ImportResult) => void;
 type FileDragStateCallback = (active: boolean) => void;
 type DropImportStateCallback = (state: { active: boolean; count: number }) => void;
+type MenuCallback = () => void;
 
 const dropImportCallbacks = new Set<DropImportCallback>();
 const fileDragStateCallbacks = new Set<FileDragStateCallback>();
@@ -35,8 +36,17 @@ const api = {
   getReadme: () => ipcRenderer.invoke("app:get-readme") as Promise<string>,
   detectTracks: (tracks: TrackInfo[], settings: DetectionSettings) =>
     ipcRenderer.invoke("tracks:detect", tracks, settings) as Promise<DetectionResult[]>,
-  saveLoopedCopies: (tracks: TrackInfo[]) =>
-    ipcRenderer.invoke("tracks:save-looped", tracks) as Promise<SaveResult[]>
+  saveLoopedCopies: (tracks: TrackInfo[], options: SaveOptions) =>
+    ipcRenderer.invoke("tracks:save-looped", tracks, options) as Promise<SaveResult[]>,
+  selectOutputDirectory: () => ipcRenderer.invoke("app:select-output-directory") as Promise<string | null>,
+  openSavedFolder: (outputPath: string) => ipcRenderer.invoke("app:open-saved-folder", outputPath) as Promise<string>,
+  onOpenSaveSettings: (callback: MenuCallback) => {
+    const listener = () => callback();
+    ipcRenderer.on("app:open-save-settings", listener);
+    return () => {
+      ipcRenderer.removeListener("app:open-save-settings", listener);
+    };
+  }
 };
 
 contextBridge.exposeInMainWorld("autoLooper", api);

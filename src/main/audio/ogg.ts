@@ -54,6 +54,42 @@ export function parseOggVorbis(buffer: Buffer): ParsedAudio {
   };
 }
 
+export function parseOggOpus(buffer: Buffer): ParsedAudio {
+  const pages = readOggPages(buffer);
+  const packets = extractPackets(buffer, pages, 2);
+  if (packets.length < 2 || packets[0].toString("ascii", 0, 8) !== "OpusHead") {
+    throw new Error("Unsupported Ogg: only Opus streams are supported for .opus files.");
+  }
+
+  const head = packets[0];
+  if (head.length < 19) {
+    throw new Error("Invalid Ogg Opus identification header.");
+  }
+
+  const channels = head.readUInt8(9);
+  const preSkip = head.readUInt16LE(10);
+  const sampleRate = 48000;
+  const comments = parseOpusCommentPacket(packets[1]);
+  const granule = lastGranulePosition(pages);
+  if (granule > BigInt(Number.MAX_SAFE_INTEGER)) {
+    throw new Error("Invalid Ogg Opus: sample count is too large.");
+  }
+  const durationSamples = Math.max(0, Number(granule) - preSkip);
+  const loop = loopFromComments(comments.comments);
+  validateAudioShape("Ogg Opus", channels, sampleRate, durationSamples);
+
+  return {
+    format: "opus",
+    sampleRate,
+    channels,
+    bitDepth: null,
+    durationSamples,
+    loop,
+    waveform: null,
+    validation: loop ? "Ogg Opus loop comments loaded." : "Ready. Waveform preview requires Opus decode support."
+  };
+}
+
 export function writeOggVorbisLoop(input: Buffer, loop: LoopMarker): Buffer {
   const pages = readOggPages(input);
   const extraction = extractHeaderPackets(input, pages);
@@ -65,6 +101,22 @@ export function writeOggVorbisLoop(input: Buffer, loop: LoopMarker): Buffer {
   }
 
   const headerPackets = [extraction.identification, updatedCommentPacket, extraction.setup];
+  const rebuiltHeader = paginateHeaderPackets(headerPackets, pages[0].serial);
+  const remainingPages = renumberPages(input, pages.slice(extraction.headerPageCount), pages[0].serial, rebuiltHeader.nextSequence);
+  return Buffer.concat([...rebuiltHeader.pages, ...remainingPages]);
+}
+
+export function writeOggOpusLoop(input: Buffer, loop: LoopMarker): Buffer {
+  const pages = readOggPages(input);
+  const extraction = extractOpusHeaderPackets(input, pages);
+  const updatedCommentPacket = updateOpusCommentPacket(extraction.comment.packet, loop);
+
+  const lastHeaderPage = pages[extraction.headerPageCount - 1];
+  if (!lastHeaderPage || extraction.commentPacketEnd !== lastHeaderPage.dataEnd) {
+    throw new Error("Unsupported Ogg Opus layout: audio packets share the comment header page.");
+  }
+
+  const headerPackets = [extraction.head, updatedCommentPacket];
   const rebuiltHeader = paginateHeaderPackets(headerPackets, pages[0].serial);
   const remainingPages = renumberPages(input, pages.slice(extraction.headerPageCount), pages[0].serial, rebuiltHeader.nextSequence);
   return Buffer.concat([...rebuiltHeader.pages, ...remainingPages]);
@@ -164,11 +216,60 @@ function extractHeaderPackets(buffer: Buffer, pages: OggPage[]) {
   throw new Error("Invalid Ogg Vorbis: missing header packets.");
 }
 
+function extractOpusHeaderPackets(buffer: Buffer, pages: OggPage[]) {
+  const packetBuffers: Buffer[] = [];
+  const packetRanges: Array<{ start: number; end: number; pageIndex: number }> = [];
+  let current: Buffer[] = [];
+  let packetStart = -1;
+
+  for (let pageIndex = 0; pageIndex < pages.length; pageIndex += 1) {
+    const page = pages[pageIndex];
+    let dataOffset = page.dataOffset;
+    for (const segmentSize of page.segments) {
+      if (packetStart < 0) {
+        packetStart = dataOffset;
+      }
+      current.push(buffer.subarray(dataOffset, dataOffset + segmentSize));
+      dataOffset += segmentSize;
+      if (segmentSize < 255) {
+        const packet = Buffer.concat(current);
+        packetBuffers.push(packet);
+        packetRanges.push({ start: packetStart, end: dataOffset, pageIndex });
+        current = [];
+        packetStart = -1;
+        if (packetBuffers.length === 2) {
+          const comment = parseOpusCommentPacket(packetBuffers[1]);
+          return {
+            head: packetBuffers[0],
+            comment,
+            commentPacketStart: packetRanges[1].start,
+            commentPacketEnd: packetRanges[1].end,
+            headerPageCount: pageIndex + 1
+          };
+        }
+      }
+    }
+  }
+  throw new Error("Invalid Ogg Opus: missing header packets.");
+}
+
 function parseVorbisCommentPacket(packet: Buffer): VorbisComments {
   if (packet[0] !== 3 || packet.toString("ascii", 1, 7) !== "vorbis") {
     throw new Error("Invalid Vorbis comment header.");
   }
-  let offset = 7;
+  const parsed = parseVorbisCommentFields(packet, 7);
+  return { ...parsed, packet };
+}
+
+function parseOpusCommentPacket(packet: Buffer): VorbisComments {
+  if (packet.toString("ascii", 0, 8) !== "OpusTags") {
+    throw new Error("Invalid Opus comment header.");
+  }
+  const parsed = parseVorbisCommentFields(packet, 8);
+  return { ...parsed, packet };
+}
+
+function parseVorbisCommentFields(packet: Buffer, offset: number): Omit<VorbisComments, "packet"> {
   requirePacketBytes(packet, offset, 4, "vendor length");
   const vendorLength = packet.readUInt32LE(offset);
   offset += 4;
@@ -182,7 +283,8 @@ function parseVorbisCommentPacket(packet: Buffer): VorbisComments {
   }
   offset += 4;
   const comments: string[] = [];
-  for (let i = 0; i < count && offset + 4 <= packet.length; i += 1) {
+  for (let i = 0; i < count; i += 1) {
+    requirePacketBytes(packet, offset, 4, "comment length");
     const length = packet.readUInt32LE(offset);
     if (length > maxVorbisCommentBytes) {
       throw new Error(`Invalid Vorbis comment header: comment is too large (${length} bytes).`);
@@ -192,7 +294,7 @@ function parseVorbisCommentPacket(packet: Buffer): VorbisComments {
     comments.push(packet.toString("utf8", offset, offset + length));
     offset += length;
   }
-  return { vendor, comments, packet };
+  return { vendor, comments };
 }
 
 function requirePacketBytes(packet: Buffer, offset: number, length: number, label: string): void {
@@ -203,17 +305,19 @@ function requirePacketBytes(packet: Buffer, offset: number, length: number, labe
 
 function updateVorbisCommentPacket(packet: Buffer, loop: LoopMarker): Buffer {
   const current = parseVorbisCommentPacket(packet);
-  const kept = current.comments.filter((comment) => {
-    const key = comment.split("=", 1)[0]?.toUpperCase();
-    return key !== "LOOPSTART" && key !== "LOOPEND" && key !== "LOOPLENGTH";
-  });
-  kept.push(`LOOPSTART=${loop.startSample}`);
-  kept.push(`LOOPEND=${loop.endSample}`);
-  kept.push(`LOOPLENGTH=${loop.lengthSamples}`);
+  const commentFields = buildVorbisCommentFields(current.vendor, loopCommentStrings(current.comments, loop));
+  return Buffer.concat([Buffer.from([3]), Buffer.from("vorbis"), commentFields, Buffer.from([1])]);
+}
 
-  const vendor = Buffer.from(current.vendor, "utf8");
-  const commentBuffers = kept.map((comment) => Buffer.from(comment, "utf8"));
-  const parts: Buffer[] = [Buffer.from([3]), Buffer.from("vorbis")];
+function updateOpusCommentPacket(packet: Buffer, loop: LoopMarker): Buffer {
+  const current = parseOpusCommentPacket(packet);
+  return Buffer.concat([Buffer.from("OpusTags"), buildVorbisCommentFields(current.vendor, loopCommentStrings(current.comments, loop))]);
+}
+
+function buildVorbisCommentFields(vendorText: string, comments: string[]): Buffer {
+  const vendor = Buffer.from(vendorText, "utf8");
+  const commentBuffers = comments.map((comment) => Buffer.from(comment, "utf8"));
+  const parts: Buffer[] = [];
   const vendorLength = Buffer.alloc(4);
   vendorLength.writeUInt32LE(vendor.length, 0);
   parts.push(vendorLength, vendor);
@@ -225,8 +329,18 @@ function updateVorbisCommentPacket(packet: Buffer, loop: LoopMarker): Buffer {
     length.writeUInt32LE(comment.length, 0);
     parts.push(length, comment);
   }
-  parts.push(Buffer.from([1]));
   return Buffer.concat(parts);
+}
+
+function loopCommentStrings(comments: string[], loop: LoopMarker): string[] {
+  const kept = comments.filter((comment) => {
+    const key = comment.split("=", 1)[0]?.toUpperCase();
+    return key !== "LOOPSTART" && key !== "LOOPEND" && key !== "LOOPLENGTH";
+  });
+  kept.push(`LOOPSTART=${loop.startSample}`);
+  kept.push(`LOOPEND=${loop.endSample}`);
+  kept.push(`LOOPLENGTH=${loop.lengthSamples}`);
+  return kept;
 }
 
 function loopFromComments(comments: string[]): LoopMarker | null {

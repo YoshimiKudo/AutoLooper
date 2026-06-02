@@ -1,7 +1,7 @@
 ﻿import React, { useEffect, useId, useMemo, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
 import { BookOpen, Copy, Crosshair, FileAudio, FolderOpen, Hash, Languages, Play, Redo2, Repeat, Save, Search, Square, Table2, Trash2, Undo2, Upload } from "lucide-react";
-import type { AudioFormat, DetectionResult, DetectionSettings, TrackInfo, TrackStatus, WaveformPeaks } from "../shared/types";
+import type { AudioFormat, DetectionResult, DetectionSettings, SaveOptions, SaveResult, TrackInfo, TrackStatus, WaveformPeaks } from "../shared/types";
 import type { LoopCandidate } from "../shared/detectCore";
 import { formatPercent, formatSamples, formatTime, msToSample, sampleToMs } from "../shared/format";
 import "./styles.css";
@@ -10,7 +10,7 @@ type ViewMode = "waveform" | "list";
 type SortDirection = "asc" | "desc";
 type PlaybackKind = "track" | "loop-check";
 type Language = "ja" | "en";
-type DetectionPreset = "high" | "mid" | "low" | "custom";
+type DetectionPreset = "normal" | "deep" | "custom";
 type DisplayUnit = "samples" | "time";
 
 interface PlaybackSession {
@@ -71,19 +71,23 @@ interface TrackHistoryTransaction {
 }
 
 const defaultSettings: DetectionSettings = {
+  mode: "normal",
   matchWindowMs: 1500,
   matchThreshold: 88,
   minimumLoopMs: 3000,
   loopCheckPrerollMs: 1000
 };
 
-const detectionPresets: Record<Exclude<DetectionPreset, "custom">, Pick<DetectionSettings, "matchWindowMs" | "matchThreshold" | "minimumLoopMs">> = {
-  high: { matchWindowMs: 3000, matchThreshold: 95, minimumLoopMs: 3000 },
-  mid: { matchWindowMs: 1500, matchThreshold: 88, minimumLoopMs: 3000 },
-  low: { matchWindowMs: 1000, matchThreshold: 65, minimumLoopMs: 3000 }
+const detectionPresets: Record<Exclude<DetectionPreset, "custom">, DetectionSettings> = {
+  normal: { mode: "normal", matchWindowMs: 1500, matchThreshold: 88, minimumLoopMs: 3000, loopCheckPrerollMs: 1000 },
+  deep: { mode: "deep", matchWindowMs: 1500, matchThreshold: 88, minimumLoopMs: 3000, loopCheckPrerollMs: 1000 }
 };
 
 const customPresetStorageKey = "autolooper.customDetectionPreset.v1";
+const defaultSaveOptions: SaveOptions = {
+  outputDirectory: null,
+  filenameSuffix: "_looped"
+};
 const maxTrackHistoryEntries = 100;
 
 const uiText = {
@@ -131,7 +135,7 @@ const uiText = {
     autoLoopCanceled: "自動ループを中止しました",
     detectingNow: "検出中",
     cancelDetection: "検出を中止",
-    cancelingDetection: "中止要求中",
+    cancelingDetection: "中止中",
     cancelDetectionDetail: "現在のファイル処理後に停止します",
     detectionProgress: "検出進捗",
     elapsedTime: "経過",
@@ -152,12 +156,13 @@ const uiText = {
     checkingLoop: "ループ確認中",
     stoppedRemoved: "削除したトラックの再生を停止",
     removedFromList: "件をリストから削除しました。音声ファイル自体は削除していません。",
-    emptyImport: "WAV、AIFF、Ogg Vorbis、MP3 ファイルを読み込んでください。",
+    emptyImport: "WAV、AIFF、Ogg Vorbis、MP3、FLAC、Opus ファイルを読み込んでください。",
     play: "再生",
     stop: "停止",
     checkLoop: "ループ確認",
     stopCheck: "確認停止",
     file: "ファイル",
+    selectColumn: "選択",
     format: "形式",
     status: "状態",
     confidence: "信頼度",
@@ -182,15 +187,13 @@ const uiText = {
     error: "エラー",
     autoLoopSettings: "自動ループ設定",
     detectionPreset: "検出プリセット",
-    highPreset: "High",
-    midPreset: "Mid",
-    lowPreset: "Low",
-    customPreset: "カスタム",
-    highPresetHelp: "現行の厳しめ設定。誤検出を抑えます。",
-    midPresetHelp: "標準設定。やや揺れのあるループも拾います。",
-    lowPresetHelp: "広めに探索。見落としを減らしますが候補確認が必要です。",
-    customPresetHelp: "保存済みのカスタム設定です。",
-    customPresetEmptyHelp: "カスタムは未保存です。現在の数値を保存すると次回以降も使えます。",
+    normalPreset: "Normal",
+    deepPreset: "Deep",
+    customPreset: "Custom",
+    normalPresetHelp: "通常検出です。処理が速く、波形の一致を中心に候補を探します。",
+    deepPresetHelp: "ビート位置と音量差も見る精密検出です。",
+    customPresetHelp: "保存済みの検出方式と設定値です。",
+    customPresetEmptyHelp: "Customは未保存です。現在の検出方式と数値を保存すると次回以降も使えます。",
     saveCustomPreset: "カスタム保存",
     customPresetSaved: "カスタムプリセットを保存しました",
     matchWindow: "照合区間",
@@ -201,6 +204,33 @@ const uiText = {
     minimumLoopHelp: "これより短い候補は無視します。",
     loopCheckPreroll: "ループ確認開始位置",
     loopCheckPrerollHelp: "ループ終了位置の何ms前から再生して継ぎ目を確認するかです。",
+    saveSettings: "保存設定",
+    outputDirectory: "保存先",
+    outputDirectoryHelp: "未指定の場合は元ファイルと同じフォルダに保存します。",
+    sourceDirectory: "元ファイルと同じフォルダ",
+    chooseFolder: "フォルダ選択",
+    clearFolder: "解除",
+    filenameSuffix: "追加文字",
+    filenameSuffixHelp: "元ファイル名の後ろ、拡張子の前に追加します。",
+    invalidSuffix: "ファイル名に使えない文字が含まれています。",
+    saveResultTitle: "保存結果",
+    saveSuccessMessage: "保存が完了しました",
+    savedFiles: "保存成功",
+    warningFiles: "警告",
+    errorFiles: "エラー",
+    saveConfirmTitle: "保存確認",
+    saveConfirmQuestion: "ループ付きコピーを保存しますか？",
+    saveConfirmDetail: "選択中のファイルを別名で保存します。",
+    saveConfirmTargets: "対象",
+    saveConfirmDestination: "保存先",
+    saveConfirmSuffix: "追加文字",
+    saveConfirmMp3Warning: "MP3はループマーカーを埋め込めないため保存されません。",
+    saveConfirmSavable: "保存可能",
+    saveConfirmNoSavable: "保存できるファイルがありません。",
+    confirmSave: "保存する",
+    cancel: "キャンセル",
+    openSaveFolder: "保存先を開く",
+    saveFolderOpenFailed: "保存先を開けませんでした",
     loopPoints: "ループポイント",
     sort: "ソート",
     fileName: "ファイル名",
@@ -261,7 +291,7 @@ const uiText = {
     autoLoopCanceled: "Auto Loop canceled",
     detectingNow: "Detecting",
     cancelDetection: "Cancel Detection",
-    cancelingDetection: "Cancel requested",
+    cancelingDetection: "Canceling",
     cancelDetectionDetail: "Stopping after the current file finishes",
     detectionProgress: "Detection progress",
     elapsedTime: "Elapsed",
@@ -282,12 +312,13 @@ const uiText = {
     checkingLoop: "Checking loop",
     stoppedRemoved: "Stopped: removed track",
     removedFromList: "removed from the list. Files were not deleted.",
-    emptyImport: "Import WAV, AIFF, Ogg Vorbis, or MP3 files.",
+    emptyImport: "Import WAV, AIFF, Ogg Vorbis, MP3, FLAC, or Opus files.",
     play: "Play",
     stop: "Stop",
     checkLoop: "Check Loop",
     stopCheck: "Stop Check",
     file: "File",
+    selectColumn: "Select",
     format: "Format",
     status: "Status",
     confidence: "Confidence",
@@ -312,15 +343,13 @@ const uiText = {
     error: "Error",
     autoLoopSettings: "Auto Loop Settings",
     detectionPreset: "Detection Preset",
-    highPreset: "High",
-    midPreset: "Mid",
-    lowPreset: "Low",
+    normalPreset: "Normal",
+    deepPreset: "Deep",
     customPreset: "Custom",
-    highPresetHelp: "Current strict setting. Reduces false positives.",
-    midPresetHelp: "Balanced setting for loops with moderate variation.",
-    lowPresetHelp: "Broad search. Reduces misses, but candidates need review.",
-    customPresetHelp: "Saved custom detection settings.",
-    customPresetEmptyHelp: "No custom preset is saved yet. Save the current values to reuse them later.",
+    normalPresetHelp: "Standard detection. Fast and mainly based on waveform similarity.",
+    deepPresetHelp: "Precise detection that also considers beat-like positions and loudness differences. It can take longer.",
+    customPresetHelp: "Saved custom detection mode and settings.",
+    customPresetEmptyHelp: "No custom preset is saved yet. Save the current mode and values to reuse them later.",
     saveCustomPreset: "Save Custom",
     customPresetSaved: "Custom preset saved",
     matchWindow: "Match Window",
@@ -331,6 +360,33 @@ const uiText = {
     minimumLoopHelp: "Shortest allowed loop length. Shorter candidates are ignored.",
     loopCheckPreroll: "Loop Check Preroll",
     loopCheckPrerollHelp: "How many ms before Loop End playback starts when checking the seam.",
+    saveSettings: "Save Settings",
+    outputDirectory: "Output Folder",
+    outputDirectoryHelp: "When unset, files are saved beside the source file.",
+    sourceDirectory: "Same as source file",
+    chooseFolder: "Choose Folder",
+    clearFolder: "Clear",
+    filenameSuffix: "Filename Suffix",
+    filenameSuffixHelp: "Added after the original filename and before the extension.",
+    invalidSuffix: "Filename suffix contains invalid characters.",
+    saveResultTitle: "Save Result",
+    saveSuccessMessage: "Save complete",
+    savedFiles: "Saved",
+    warningFiles: "Warnings",
+    errorFiles: "Errors",
+    saveConfirmTitle: "Confirm Save",
+    saveConfirmQuestion: "Save looped copies?",
+    saveConfirmDetail: "Selected files will be saved as separate copies.",
+    saveConfirmTargets: "Targets",
+    saveConfirmDestination: "Destination",
+    saveConfirmSuffix: "Suffix",
+    saveConfirmMp3Warning: "MP3 files cannot store embedded loop markers and will not be saved.",
+    saveConfirmSavable: "Savable",
+    saveConfirmNoSavable: "No savable files.",
+    confirmSave: "Save",
+    cancel: "Cancel",
+    openSaveFolder: "Open Save Folder",
+    saveFolderOpenFailed: "Could not open save folder",
     loopPoints: "Loop Points",
     sort: "Sort",
     fileName: "File Name",
@@ -391,6 +447,7 @@ function readSavedCustomPreset(): DetectionSettings | null {
       return null;
     }
     return {
+      mode: parsed.mode === "deep" ? "deep" : "normal",
       matchWindowMs: parsed.matchWindowMs,
       matchThreshold: parsed.matchThreshold,
       minimumLoopMs: parsed.minimumLoopMs,
@@ -401,6 +458,10 @@ function readSavedCustomPreset(): DetectionSettings | null {
   }
 }
 
+function hasInvalidFilenameSuffix(value: string): boolean {
+  return /[\x00-\x1f\\/:*?"<>|]/.test(value) || value.length > 80;
+}
+
 function waitForUiFrame(): Promise<void> {
   return new Promise((resolve) => {
     window.requestAnimationFrame(() => resolve());
@@ -409,7 +470,7 @@ function waitForUiFrame(): Promise<void> {
 
 function resolveActiveTrackId(activeTrackId: string | null, selectedIds: string[], tracks: TrackInfo[]): string | null {
   const existingIds = new Set(tracks.map((track) => track.id));
-  if (activeTrackId && selectedIds.includes(activeTrackId) && existingIds.has(activeTrackId)) {
+  if (activeTrackId && existingIds.has(activeTrackId)) {
     return activeTrackId;
   }
   for (let index = selectedIds.length - 1; index >= 0; index -= 1) {
@@ -428,7 +489,11 @@ export default function App(): React.ReactElement {
   const [activeTrackId, setActiveTrackId] = useState<string | null>(demoTracks[0]?.id ?? null);
   const [settings, setSettings] = useState(defaultSettings);
   const [savedCustomSettings, setSavedCustomSettings] = useState<DetectionSettings | null>(() => readSavedCustomPreset());
-  const [detectionPreset, setDetectionPreset] = useState<DetectionPreset>("mid");
+  const [detectionPreset, setDetectionPreset] = useState<DetectionPreset>("normal");
+  const [saveOptions, setSaveOptions] = useState<SaveOptions>(defaultSaveOptions);
+  const [saveSettingsOpen, setSaveSettingsOpen] = useState(false);
+  const [saveConfirmIds, setSaveConfirmIds] = useState<string[] | null>(null);
+  const [saveDialog, setSaveDialog] = useState<SaveResult[] | null>(null);
   const [view, setView] = useState<ViewMode>("waveform");
   const [sortRules, setSortRules] = useState<SortRule[]>([{ key: "fileName", direction: "asc" }]);
   const [filter, setFilter] = useState("");
@@ -460,6 +525,7 @@ export default function App(): React.ReactElement {
   const visibleTracks = useMemo(() => sortTracks(filterTracks(tracks, filter), sortRules), [tracks, filter, sortRules]);
   const selectedTracks = tracks.filter((track) => selectedIds.includes(track.id));
   const activeTracks = selectedTracks;
+  const saveConfirmTracks = saveConfirmIds ? saveConfirmIds.flatMap((id) => tracks.find((track) => track.id === id) ?? []) : [];
   const removableTrackIds = selectedIds;
   const warningTracks = tracks.filter(isWarningTrack);
   const errorTracks = tracks.filter((track) => track.status === "error");
@@ -467,6 +533,7 @@ export default function App(): React.ReactElement {
   const issueTracks = issuePanel === "warnings" ? warningTracks : issuePanel === "errors" ? errorTracks : [];
   const isDetecting = detectionProgress !== null;
   const isImporting = importProgress !== null;
+  const saveOptionsInvalid = hasInvalidFilenameSuffix(saveOptions.filenameSuffix);
 
   useEffect(() => {
     tracksRef.current = tracks;
@@ -490,10 +557,14 @@ export default function App(): React.ReactElement {
         setImportProgress(null);
       }
     });
+    const unsubscribeSaveSettings = window.autoLooper.onOpenSaveSettings(() => {
+      setSaveSettingsOpen(true);
+    });
     return () => {
       unsubscribeImport();
       unsubscribeDragState();
       unsubscribeImportState();
+      unsubscribeSaveSettings();
     };
   }, [language]);
 
@@ -841,8 +912,12 @@ export default function App(): React.ReactElement {
 
   async function saveLooped(targets: TrackInfo[]): Promise<void> {
     if (targets.length === 0) return;
+    if (saveOptionsInvalid) {
+      setStatus(ui(language, "invalidSuffix"));
+      return;
+    }
     setStatus(`${ui(language, "saving")}: ${targets.length}`);
-    const results = await window.autoLooper.saveLoopedCopies(targets);
+    const results = await window.autoLooper.saveLoopedCopies(targets, saveOptions);
     setTracks((current) =>
       current.map((track) => {
         const result = results.find((item) => item.id === track.id);
@@ -855,7 +930,43 @@ export default function App(): React.ReactElement {
         };
       })
     );
+    setSaveDialog(results);
     setStatus(`${ui(language, "saveComplete")}: ${results.filter((item) => item.status === "saved").length}/${countText(language, results.length, "savedCount")}`);
+  }
+
+  function requestSaveLooped(targets: TrackInfo[]): void {
+    if (targets.length === 0) return;
+    if (saveOptionsInvalid) {
+      setStatus(ui(language, "invalidSuffix"));
+      return;
+    }
+    setSaveConfirmIds(targets.map((track) => track.id));
+  }
+
+  async function confirmSaveLooped(): Promise<void> {
+    const ids = saveConfirmIds;
+    if (!ids) return;
+    setSaveConfirmIds(null);
+    const targets = ids.flatMap((id) => tracksRef.current.find((track) => track.id === id) ?? []);
+    await saveLooped(targets);
+  }
+
+  async function chooseOutputDirectory(): Promise<void> {
+    const outputDirectory = await window.autoLooper.selectOutputDirectory();
+    if (outputDirectory) {
+      setSaveOptions((current) => ({ ...current, outputDirectory }));
+    }
+  }
+
+  async function openSavedFolder(outputPath: string): Promise<void> {
+    try {
+      const error = await window.autoLooper.openSavedFolder(outputPath);
+      if (error) {
+        setStatus(`${ui(language, "saveFolderOpenFailed")}: ${error}`);
+      }
+    } catch (error) {
+      setStatus(error instanceof Error ? `${ui(language, "saveFolderOpenFailed")}: ${error.message}` : ui(language, "saveFolderOpenFailed"));
+    }
   }
 
   function patchTrack(id: string, patch: Partial<TrackInfo>, recordHistory = true): void {
@@ -1121,32 +1232,25 @@ export default function App(): React.ReactElement {
     });
   }
 
+  function focusWaveformTrack(id: string): void {
+    setWaveformPreviewTrackId(null);
+    setActiveTrackId(id);
+  }
+
   function startSelectionDrag(id: string, isSelected: boolean): void {
     const shouldSelect = !isSelected;
     checkboxSelectionDragRef.current = { shouldSelect };
     setTrackSelected(id, shouldSelect);
   }
 
-  function isSelectionIgnoredTarget(target: EventTarget): boolean {
-    return target instanceof HTMLElement && Boolean(target.closest("input, button, select, textarea, a"));
-  }
-
-  function beginTrackSelection(id: string, isSelected: boolean, event: React.PointerEvent<HTMLElement> | React.MouseEvent<HTMLElement>): void {
-    if (event.button !== 0) return;
-    if (isSelectionIgnoredTarget(event.target)) return;
-    event.preventDefault();
-    event.stopPropagation();
-    startSelectionDrag(id, isSelected);
-  }
-
-  function beginCheckboxSelection(id: string, event: React.PointerEvent<HTMLInputElement>): void {
+  function beginCheckboxSelection(id: string, event: React.PointerEvent<HTMLElement>): void {
     if (event.button !== 0) return;
     event.preventDefault();
     event.stopPropagation();
     startSelectionDrag(id, selectedIds.includes(id));
   }
 
-  function continueTrackSelection(id: string, event: React.PointerEvent<HTMLElement> | React.MouseEvent<HTMLElement>): void {
+  function continueSelectionDrag(id: string, event: React.PointerEvent<HTMLElement> | React.MouseEvent<HTMLElement>): void {
     const drag = checkboxSelectionDragRef.current;
     if (!drag || (event.buttons & 1) !== 1) return;
     event.preventDefault();
@@ -1154,8 +1258,8 @@ export default function App(): React.ReactElement {
     setTrackSelected(id, drag.shouldSelect);
   }
 
-  function continueCheckboxSelection(id: string, event: React.PointerEvent<HTMLInputElement>): void {
-    continueTrackSelection(id, event);
+  function continueCheckboxSelection(id: string, event: React.PointerEvent<HTMLElement>): void {
+    continueSelectionDrag(id, event);
   }
 
   function openTrackContextMenu(track: TrackInfo, event: React.MouseEvent): void {
@@ -1249,7 +1353,7 @@ export default function App(): React.ReactElement {
         <button onClick={() => void detect(tracks)} disabled={tracks.length === 0 || isDetecting || isImporting}>
           <Search size={19} /> {ui(language, "autoLoopAll")}
         </button>
-        <button className="save" onClick={() => void saveLooped(activeTracks)} disabled={activeTracks.length === 0 || isDetecting || isImporting}>
+        <button className="save" onClick={() => requestSaveLooped(activeTracks)} disabled={activeTracks.length === 0 || isDetecting || isImporting || saveOptionsInvalid}>
           <Save size={19} /> {ui(language, "saveLoopedCopies")}
         </button>
         <button onClick={() => removeTracks(removableTrackIds)} disabled={removableTrackIds.length === 0 || isDetecting || isImporting}>
@@ -1317,6 +1421,39 @@ export default function App(): React.ReactElement {
         />
       )}
 
+      {saveSettingsOpen && (
+        <SaveSettingsDialog
+          saveOptions={saveOptions}
+          setSaveOptions={setSaveOptions}
+          chooseOutputDirectory={chooseOutputDirectory}
+          invalid={saveOptionsInvalid}
+          language={language}
+          onClose={() => setSaveSettingsOpen(false)}
+        />
+      )}
+
+      {saveConfirmIds && (
+        <SaveConfirmDialog
+          tracks={saveConfirmTracks}
+          saveOptions={saveOptions}
+          setSaveOptions={setSaveOptions}
+          chooseOutputDirectory={chooseOutputDirectory}
+          invalid={saveOptionsInvalid}
+          language={language}
+          onCancel={() => setSaveConfirmIds(null)}
+          onConfirm={() => void confirmSaveLooped()}
+        />
+      )}
+
+      {saveDialog && (
+        <SaveResultDialog
+          results={saveDialog}
+          language={language}
+          onClose={() => setSaveDialog(null)}
+          onOpenFolder={(outputPath) => void openSavedFolder(outputPath)}
+        />
+      )}
+
       {view === "waveform" ? (
         <WaveformView
           tracks={visibleTracks}
@@ -1330,8 +1467,7 @@ export default function App(): React.ReactElement {
           saveCustomPreset={saveCustomPreset}
           sortRules={sortRules}
           setSortRules={setSortRules}
-          beginTrackSelection={beginTrackSelection}
-          continueTrackSelection={continueTrackSelection}
+          focusTrack={focusWaveformTrack}
           beginCheckboxSelection={beginCheckboxSelection}
           continueCheckboxSelection={continueCheckboxSelection}
           openTrackContextMenu={openTrackContextMenu}
@@ -1340,6 +1476,7 @@ export default function App(): React.ReactElement {
           moveLoopRange={moveLoopRange}
           recordTrackHistory={recordTrackHistory}
           currentScanningTrackId={detectionProgress?.currentTrackId ?? waveformPreviewTrackId}
+          currentScanningMode={detectionProgress ? settings.mode : null}
           playingTrackId={playingTrackId}
           playbackKind={playbackKind}
           playhead={playhead}
@@ -1550,6 +1687,171 @@ function ReadmeModal({
   );
 }
 
+function SaveSettingsDialog({
+  saveOptions,
+  setSaveOptions,
+  chooseOutputDirectory,
+  invalid,
+  language,
+  onClose
+}: {
+  saveOptions: SaveOptions;
+  setSaveOptions: (options: SaveOptions) => void;
+  chooseOutputDirectory: () => Promise<void>;
+  invalid: boolean;
+  language: Language;
+  onClose: () => void;
+}): React.ReactElement {
+  return (
+    <div className="modal-backdrop" onClick={onClose}>
+      <section className="save-settings-modal panel" onClick={(event) => event.stopPropagation()}>
+        <header>
+          <strong>{ui(language, "saveSettings")}</strong>
+          <button type="button" onClick={onClose}>{ui(language, "close")}</button>
+        </header>
+        <div className="save-settings-modal-body">
+          <SaveSettingsPanel
+            saveOptions={saveOptions}
+            setSaveOptions={setSaveOptions}
+            chooseOutputDirectory={chooseOutputDirectory}
+            invalid={invalid}
+            language={language}
+            showTitle={false}
+          />
+        </div>
+      </section>
+    </div>
+  );
+}
+
+function SaveConfirmDialog({
+  tracks,
+  saveOptions,
+  setSaveOptions,
+  chooseOutputDirectory,
+  invalid,
+  language,
+  onCancel,
+  onConfirm
+}: {
+  tracks: TrackInfo[];
+  saveOptions: SaveOptions;
+  setSaveOptions: (options: SaveOptions) => void;
+  chooseOutputDirectory: () => Promise<void>;
+  invalid: boolean;
+  language: Language;
+  onCancel: () => void;
+  onConfirm: () => void;
+}): React.ReactElement {
+  const destination = saveOptions.outputDirectory || ui(language, "sourceDirectory");
+  const mp3Count = tracks.filter((track) => track.format === "mp3").length;
+  const savableCount = tracks.length - mp3Count;
+  return (
+    <div className="modal-backdrop" onClick={onCancel}>
+      <section className="save-confirm-modal panel" onClick={(event) => event.stopPropagation()}>
+        <header>
+          <strong>{ui(language, "saveConfirmTitle")}</strong>
+        </header>
+        <div className="save-confirm-body">
+          <h2>{ui(language, "saveConfirmQuestion")}</h2>
+          <p>{ui(language, "saveConfirmDetail")}</p>
+          <dl>
+            <div>
+              <dt>{ui(language, "saveConfirmTargets")}</dt>
+              <dd>{countText(language, tracks.length, "files")}</dd>
+            </div>
+            <div>
+              <dt>{ui(language, "saveConfirmSavable")}</dt>
+              <dd>{countText(language, savableCount, "files")}</dd>
+            </div>
+            <div>
+              <dt>{ui(language, "saveConfirmDestination")}</dt>
+              <dd>
+                <button type="button" className="save-confirm-value-button" title={destination} onClick={() => void chooseOutputDirectory()}>
+                  {destination}
+                </button>
+              </dd>
+            </div>
+            <div>
+              <dt>{ui(language, "saveConfirmSuffix")}</dt>
+              <dd>
+                <input
+                  className={`save-confirm-inline-input${invalid ? " invalid-input" : ""}`}
+                  value={saveOptions.filenameSuffix}
+                  onChange={(event) => setSaveOptions({ ...saveOptions, filenameSuffix: event.target.value })}
+                  onFocus={(event) => event.currentTarget.select()}
+                />
+              </dd>
+            </div>
+          </dl>
+          {mp3Count > 0 && (
+            <p className="save-confirm-warning">
+              {ui(language, "saveConfirmMp3Warning")} {language === "ja" ? `対象: ${mp3Count}件` : `Affected: ${mp3Count}`}
+            </p>
+          )}
+          {invalid && <p className="validation error-text">{ui(language, "invalidSuffix")}</p>}
+          {savableCount === 0 && <p className="validation error-text">{ui(language, "saveConfirmNoSavable")}</p>}
+        </div>
+        <footer>
+          <button type="button" onClick={onCancel}>{ui(language, "cancel")}</button>
+          <button type="button" className="save" onClick={onConfirm} disabled={tracks.length === 0 || invalid || savableCount === 0}>
+            <Save size={16} /> {ui(language, "confirmSave")}
+          </button>
+        </footer>
+      </section>
+    </div>
+  );
+}
+
+function SaveResultDialog({
+  results,
+  language,
+  onClose,
+  onOpenFolder
+}: {
+  results: SaveResult[];
+  language: Language;
+  onClose: () => void;
+  onOpenFolder: (outputPath: string) => void;
+}): React.ReactElement {
+  const saved = results.filter((result) => result.status === "saved");
+  const warnings = results.filter((result) => result.status === "warning");
+  const errors = results.filter((result) => result.status === "error");
+  const firstSavedPath = saved[0]?.outputPath ?? "";
+  return (
+    <div className="modal-backdrop" onClick={onClose}>
+      <section className="save-result-modal panel" onClick={(event) => event.stopPropagation()}>
+        <header>
+          <strong>{ui(language, "saveResultTitle")}</strong>
+        </header>
+        <div className="save-result-body">
+          <h2>{ui(language, "saveSuccessMessage")}</h2>
+          <div className="save-result-counts">
+            <span>{ui(language, "savedFiles")}: <b>{saved.length}</b></span>
+            <span>{ui(language, "warningFiles")}: <b>{warnings.length}</b></span>
+            <span>{ui(language, "errorFiles")}: <b>{errors.length}</b></span>
+          </div>
+          <div className="save-result-list">
+            {results.map((result) => (
+              <p key={`${result.id}-${result.outputPath}`}>
+                <StatusPill status={result.status} language={language} />
+                <span>{result.outputPath || "-"}</span>
+                <small>{displayValidation(result.validation, language)}</small>
+              </p>
+            ))}
+          </div>
+        </div>
+        <footer>
+          <button type="button" onClick={() => onOpenFolder(firstSavedPath)} disabled={!firstSavedPath}>
+            <FolderOpen size={16} /> {ui(language, "openSaveFolder")}
+          </button>
+          <button type="button" onClick={onClose}>{ui(language, "close")}</button>
+        </footer>
+      </section>
+    </div>
+  );
+}
+
 function extractReadmeSection(content: string, language: Language): string {
   const normalized = content.replace(/\r\n/g, "\n");
   if (language === "ja") {
@@ -1649,7 +1951,7 @@ let detectWorker: Worker | null = null;
 let detectWorkerRequestId = 0;
 
 function usesWebAudioDetection(format: AudioFormat): boolean {
-  return format === "ogg" || format === "mp3";
+  return format === "ogg" || format === "mp3" || format === "flac" || format === "opus";
 }
 
 async function detectWithWebAudio(track: TrackInfo, settings: DetectionSettings): Promise<RendererDetection> {
@@ -1665,7 +1967,7 @@ async function detectWithWebAudio(track: TrackInfo, settings: DetectionSettings)
           id: track.id,
           loop: null,
           status: "no-loop",
-          validation: `No loop candidate reached ${settings.matchThreshold}%.`
+          validation: `No ${settings.mode === "deep" ? "Deep " : ""}loop candidate reached ${settings.matchThreshold}%.`
         },
         trackPatch: patch
       };
@@ -1684,7 +1986,7 @@ async function detectWithWebAudio(track: TrackInfo, settings: DetectionSettings)
         id: track.id,
         loop,
         status: candidate.confidence >= settings.matchThreshold ? "detected" : "low-confidence",
-        validation: `Detected at ${candidate.confidence.toFixed(1)}%.`
+        validation: `Detected${settings.mode === "deep" ? " with Deep" : ""} at ${candidate.confidence.toFixed(1)}%.`
       },
       trackPatch: patch
     };
@@ -1806,16 +2108,16 @@ function WaveformView(props: {
   saveCustomPreset: () => void;
   sortRules: SortRule[];
   setSortRules: (rules: SortRule[]) => void;
-  beginTrackSelection: (id: string, isSelected: boolean, event: React.PointerEvent<HTMLElement> | React.MouseEvent<HTMLElement>) => void;
-  continueTrackSelection: (id: string, event: React.PointerEvent<HTMLElement> | React.MouseEvent<HTMLElement>) => void;
-  beginCheckboxSelection: (id: string, event: React.PointerEvent<HTMLInputElement>) => void;
-  continueCheckboxSelection: (id: string, event: React.PointerEvent<HTMLInputElement>) => void;
+  focusTrack: (id: string) => void;
+  beginCheckboxSelection: (id: string, event: React.PointerEvent<HTMLElement>) => void;
+  continueCheckboxSelection: (id: string, event: React.PointerEvent<HTMLElement>) => void;
   openTrackContextMenu: (track: TrackInfo, event: React.MouseEvent) => void;
   patchLoopSample: (track: TrackInfo, field: "startSample" | "endSample", value: number) => void;
   patchLoopLength: (track: TrackInfo, value: number | null, invalidInput?: string) => void;
   moveLoopRange: (track: TrackInfo, startSample: number, recordHistory?: boolean) => void;
   recordTrackHistory: () => void;
   currentScanningTrackId: string | null;
+  currentScanningMode: DetectionSettings["mode"] | null;
   playingTrackId: string | null;
   playbackKind: PlaybackKind | null;
   playhead: { trackId: string; sample: number } | null;
@@ -1837,8 +2139,7 @@ function WaveformView(props: {
     saveCustomPreset,
     sortRules,
     setSortRules,
-    beginTrackSelection,
-    continueTrackSelection,
+    focusTrack,
     beginCheckboxSelection,
     continueCheckboxSelection,
     openTrackContextMenu,
@@ -1847,6 +2148,7 @@ function WaveformView(props: {
     moveLoopRange,
     recordTrackHistory,
     currentScanningTrackId,
+    currentScanningMode,
     playingTrackId,
     playbackKind,
     playhead,
@@ -1866,8 +2168,7 @@ function WaveformView(props: {
           selectedIds={selectedIds}
           sortRules={sortRules}
           setSortRules={setSortRules}
-          beginTrackSelection={beginTrackSelection}
-          continueTrackSelection={continueTrackSelection}
+          focusTrack={focusTrack}
           beginCheckboxSelection={beginCheckboxSelection}
           continueCheckboxSelection={continueCheckboxSelection}
           openTrackContextMenu={openTrackContextMenu}
@@ -1892,6 +2193,7 @@ function WaveformView(props: {
               moveLoopRange={moveLoopRange}
               recordTrackHistory={recordTrackHistory}
               isScanning={currentScanningTrackId === selectedTrack.id || selectedTrack.status === "processing"}
+              isDeepScanning={currentScanningMode === "deep" && currentScanningTrackId === selectedTrack.id}
               language={language}
               displayUnit={displayUnit}
             />
@@ -1934,10 +2236,9 @@ function TrackTable(props: {
   selectedIds: string[];
   sortRules: SortRule[];
   setSortRules: (rules: SortRule[]) => void;
-  beginTrackSelection: (id: string, isSelected: boolean, event: React.PointerEvent<HTMLElement> | React.MouseEvent<HTMLElement>) => void;
-  continueTrackSelection: (id: string, event: React.PointerEvent<HTMLElement> | React.MouseEvent<HTMLElement>) => void;
-  beginCheckboxSelection: (id: string, event: React.PointerEvent<HTMLInputElement>) => void;
-  continueCheckboxSelection: (id: string, event: React.PointerEvent<HTMLInputElement>) => void;
+  focusTrack: (id: string) => void;
+  beginCheckboxSelection: (id: string, event: React.PointerEvent<HTMLElement>) => void;
+  continueCheckboxSelection: (id: string, event: React.PointerEvent<HTMLElement>) => void;
   openTrackContextMenu: (track: TrackInfo, event: React.MouseEvent) => void;
   language: Language;
   displayUnit: DisplayUnit;
@@ -1955,7 +2256,7 @@ function TrackTable(props: {
     <table className="data-table">
       <thead>
         <tr>
-          <th className="check-cell" />
+          <th className="check-cell">{ui(props.language, "selectColumn")}</th>
           {columns.map(([key, label]) => (
             <th key={key} onClick={(event) => props.setSortRules(nextSortRules(props.sortRules, key, event.shiftKey))}>
               {label} <SortIndicator rules={props.sortRules} column={key} />
@@ -1968,11 +2269,19 @@ function TrackTable(props: {
           <tr
             key={track.id}
             className={props.selectedIds.includes(track.id) ? "selected" : ""}
-            onPointerDown={(event) => props.beginTrackSelection(track.id, props.selectedIds.includes(track.id), event)}
-            onPointerEnter={(event) => props.continueTrackSelection(track.id, event)}
+            onPointerDown={(event) => {
+              if (event.button === 0) {
+                props.focusTrack(track.id);
+              }
+            }}
+            onClick={() => props.focusTrack(track.id)}
             onContextMenu={(event) => props.openTrackContextMenu(track, event)}
           >
-            <td className="check-cell">
+            <td
+              className="check-cell"
+              onPointerDown={(event) => props.beginCheckboxSelection(track.id, event)}
+              onPointerEnter={(event) => props.continueCheckboxSelection(track.id, event)}
+            >
               <input
                 type="checkbox"
                 checked={props.selectedIds.includes(track.id)}
@@ -2005,6 +2314,7 @@ function WaveformCanvas({
   moveLoopRange,
   recordTrackHistory,
   isScanning,
+  isDeepScanning,
   language,
   displayUnit
 }: {
@@ -2013,6 +2323,7 @@ function WaveformCanvas({
   moveLoopRange: (track: TrackInfo, startSample: number, recordHistory?: boolean) => void;
   recordTrackHistory: () => void;
   isScanning: boolean;
+  isDeepScanning: boolean;
   language: Language;
   displayUnit: DisplayUnit;
 }): React.ReactElement {
@@ -2020,6 +2331,9 @@ function WaveformCanvas({
   const height = 300;
   const svgRef = useRef<SVGSVGElement | null>(null);
   const scanGradientId = useId().replace(/:/g, "");
+  const deepBackgroundGradientId = `${scanGradientId}-deep-bg`;
+  const deepWaveGradientId = `${scanGradientId}-deep-wave-flow`;
+  const deepWaveGlowId = `${scanGradientId}-deep-wave-glow`;
   const [drag, setDrag] = useState<{ pointerId: number; pointerSample: number; startSample: number; historyRecorded: boolean } | null>(null);
   const durationSamples = Math.max(1, track.durationSamples);
   const channels = track.waveform?.channels.slice(0, 2) ?? [];
@@ -2120,8 +2434,59 @@ function WaveformCanvas({
           <stop offset="48%" stopColor="#2bd7e9" stopOpacity="0.32" />
           <stop offset="100%" stopColor="#5ad46b" stopOpacity="0" />
         </linearGradient>
+        <radialGradient id={deepBackgroundGradientId} cx="50%" cy="50%" r="74%">
+          <stop offset="0%" stopColor="#2bd7e9" stopOpacity="0.13" />
+          <stop offset="48%" stopColor="#2bd7e9" stopOpacity="0.07" />
+          <stop offset="100%" stopColor="#2bd7e9" stopOpacity="0" />
+        </radialGradient>
+        <linearGradient id={deepWaveGradientId} gradientUnits="userSpaceOnUse" x1="0" x2={width} y1="0" y2="0">
+          <stop offset="0%" stopColor="#e9fbff" stopOpacity="0" />
+          <stop offset="27%" stopColor="#2bd7e9" stopOpacity="0" />
+          <stop offset="40%" stopColor="#2bd7e9" stopOpacity="0.26" />
+          <stop offset="49%" stopColor="#ffffff" stopOpacity="0.72" />
+          <stop offset="53%" stopColor="#ffffff" stopOpacity="0.68" />
+          <stop offset="62%" stopColor="#2bd7e9" stopOpacity="0.4" />
+          <stop offset="78%" stopColor="#2bd7e9" stopOpacity="0.08" />
+          <stop offset="100%" stopColor="#2bd7e9" stopOpacity="0" />
+          <animateTransform
+            attributeName="gradientTransform"
+            type="translate"
+            from={`${-width / 2} 0`}
+            to={`${width / 2} 0`}
+            dur="5s"
+            repeatCount="indefinite"
+          />
+        </linearGradient>
+        <filter id={deepWaveGlowId} x="-12%" y="-70%" width="124%" height="240%" colorInterpolationFilters="sRGB">
+          <feGaussianBlur in="SourceGraphic" stdDeviation="12" result="wideGlow" />
+          <feColorMatrix
+            in="wideGlow"
+            type="matrix"
+            values="0 0 0 0 0.12 0 0 0 0 0.82 0 0 0 0 1 0 0 0 1.08 0"
+            result="coloredGlow"
+          />
+          <feGaussianBlur in="SourceGraphic" stdDeviation="3.5" result="tightGlow" />
+          <feMerge>
+            <feMergeNode in="coloredGlow" />
+            <feMergeNode in="tightGlow" />
+            <feMergeNode in="SourceGraphic" />
+          </feMerge>
+        </filter>
+        <filter id={`${deepBackgroundGradientId}-blur`} x="-35%" y="-80%" width="170%" height="260%">
+          <feGaussianBlur stdDeviation="18" />
+        </filter>
       </defs>
       <rect width={width} height={height} rx="8" className="waveform-bg" />
+      {isDeepScanning && (
+        <>
+          <rect width={width} height={height} rx="8" className="deep-scan-background" fill={`url(#${deepBackgroundGradientId})`} />
+          <g className="deep-scan-ripple-field">
+            <ellipse cx={width / 2} cy={height / 2} rx="112" ry="36" className="deep-scan-ripple" filter={`url(#${deepBackgroundGradientId}-blur)`} />
+            <ellipse cx={width / 2} cy={height / 2} rx="112" ry="36" className="deep-scan-ripple delay-1" filter={`url(#${deepBackgroundGradientId}-blur)`} />
+            <ellipse cx={width / 2} cy={height / 2} rx="112" ry="36" className="deep-scan-ripple delay-2" filter={`url(#${deepBackgroundGradientId}-blur)`} />
+          </g>
+        </>
+      )}
       {[0, 1].map((channelIndex) => {
         const channel = channels[channelIndex];
         const yBase = channelIndex === 0 ? 86 : 214;
@@ -2129,7 +2494,17 @@ function WaveformCanvas({
           return <line key={channelIndex} x1="20" x2={width - 20} y1={yBase} y2={yBase} className="wave-mid" />;
         }
         const path = buildWavePath(channel.min, channel.max, width, yBase, 58);
-        return <path key={channelIndex} d={path} className="wave-path" />;
+        return (
+          <g key={channelIndex}>
+            <path d={path} className="wave-path" />
+            {isDeepScanning && (
+              <>
+                <path d={path} className="deep-wave-diffusion" fill={`url(#${deepWaveGradientId})`} filter={`url(#${deepWaveGlowId})`} />
+                <path d={path} className="deep-wave-flow" fill={`url(#${deepWaveGradientId})`} />
+              </>
+            )}
+          </g>
+        );
       })}
       <text x="20" y="90" className="channel-label">L</text>
       <text x="20" y="218" className="channel-label">R</text>
@@ -2159,10 +2534,14 @@ function WaveformCanvas({
       )}
       {points === 0 && <text x="430" y="154" className="empty-wave">Waveform preview unavailable</text>}
       {isScanning && (
-        <g className="waveform-scanning" aria-label={ui(language, "scanningWaveform")}>
-          <rect width={width} height={height} rx="8" className="scan-tint" />
-          <rect x="-420" y="0" width="420" height={height} className="scan-sweep" fill={`url(#${scanGradientId})`} />
-          <text x={width / 2} y={height / 2 + 8} textAnchor="middle" className="scan-label">{ui(language, "scanningWaveform")}</text>
+        <g className={`waveform-scanning${isDeepScanning ? " deep-scanning" : ""}`} aria-label={ui(language, "scanningWaveform")}>
+          {!isDeepScanning && (
+            <>
+              <rect width={width} height={height} rx="8" className="scan-tint" />
+              <rect x="-420" y="0" width="420" height={height} className="scan-sweep" fill={`url(#${scanGradientId})`} />
+            </>
+          )}
+          <text x={width / 2} y={height / 2 + 8} textAnchor="middle" className="scan-label">{isDeepScanning ? "Deep Scanning..." : ui(language, "scanningWaveform")}</text>
         </g>
       )}
     </svg>
@@ -2187,15 +2566,13 @@ function SettingsPanel({
   language: Language;
 }): React.ReactElement {
   const presetHelp =
-    detectionPreset === "high"
-      ? ui(language, "highPresetHelp")
-      : detectionPreset === "mid"
-        ? ui(language, "midPresetHelp")
-        : detectionPreset === "low"
-          ? ui(language, "lowPresetHelp")
-          : savedCustomSettings
-            ? ui(language, "customPresetHelp")
-            : ui(language, "customPresetEmptyHelp");
+    detectionPreset === "normal"
+      ? ui(language, "normalPresetHelp")
+      : detectionPreset === "deep"
+        ? ui(language, "deepPresetHelp")
+        : savedCustomSettings
+          ? ui(language, "customPresetHelp")
+          : ui(language, "customPresetEmptyHelp");
 
   return (
     <section className="inspector-section settings-section">
@@ -2206,9 +2583,8 @@ function SettingsPanel({
           <small>{presetHelp}</small>
         </span>
         <div className="preset-buttons">
-          <button className={detectionPreset === "high" ? "active" : ""} onClick={() => applyDetectionPreset("high")}>{ui(language, "highPreset")}</button>
-          <button className={detectionPreset === "mid" ? "active" : ""} onClick={() => applyDetectionPreset("mid")}>{ui(language, "midPreset")}</button>
-          <button className={detectionPreset === "low" ? "active" : ""} onClick={() => applyDetectionPreset("low")}>{ui(language, "lowPreset")}</button>
+          <button className={detectionPreset === "normal" ? "active" : ""} onClick={() => applyDetectionPreset("normal")}>{ui(language, "normalPreset")}</button>
+          <button className={detectionPreset === "deep" ? "active" : ""} onClick={() => applyDetectionPreset("deep")}>{ui(language, "deepPreset")}</button>
           <button className={detectionPreset === "custom" ? "active" : ""} onClick={() => applyDetectionPreset("custom")} disabled={!savedCustomSettings}>{ui(language, "customPreset")}</button>
           <button className="save-custom-preset" onClick={saveCustomPreset}>{ui(language, "saveCustomPreset")}</button>
         </div>
@@ -2245,6 +2621,53 @@ function SettingsPanel({
         <input type="number" value={settings.loopCheckPrerollMs} onChange={(event) => setSettings({ ...settings, loopCheckPrerollMs: Number(event.target.value) })} />
         <em>ms</em>
       </label>
+    </section>
+  );
+}
+
+function SaveSettingsPanel({
+  saveOptions,
+  setSaveOptions,
+  chooseOutputDirectory,
+  invalid,
+  language,
+  showTitle = true
+}: {
+  saveOptions: SaveOptions;
+  setSaveOptions: (options: SaveOptions) => void;
+  chooseOutputDirectory: () => Promise<void>;
+  invalid: boolean;
+  language: Language;
+  showTitle?: boolean;
+}): React.ReactElement {
+  return (
+    <section className="inspector-section save-settings-section">
+      {showTitle && <h2>{ui(language, "saveSettings")}</h2>}
+      <div className="save-field">
+        <span>
+          <strong>{ui(language, "outputDirectory")}</strong>
+          <small>{ui(language, "outputDirectoryHelp")}</small>
+        </span>
+        <p>{saveOptions.outputDirectory || ui(language, "sourceDirectory")}</p>
+        <div className="save-field-actions">
+          <button type="button" onClick={() => void chooseOutputDirectory()}>{ui(language, "chooseFolder")}</button>
+          <button type="button" onClick={() => setSaveOptions({ ...saveOptions, outputDirectory: null })} disabled={!saveOptions.outputDirectory}>{ui(language, "clearFolder")}</button>
+        </div>
+      </div>
+      <label className="setting-field">
+        <span>
+          <strong>{ui(language, "filenameSuffix")}</strong>
+          <small>{ui(language, "filenameSuffixHelp")}</small>
+        </span>
+        <input
+          className={invalid ? "invalid-input" : ""}
+          type="text"
+          value={saveOptions.filenameSuffix}
+          onChange={(event) => setSaveOptions({ ...saveOptions, filenameSuffix: event.target.value })}
+        />
+        <em />
+      </label>
+      {invalid && <p className="validation error-text">{ui(language, "invalidSuffix")}</p>}
     </section>
   );
 }
@@ -2300,8 +2723,8 @@ function ListEditorView(props: {
   setFilter: (value: string) => void;
   sortRules: SortRule[];
   setSortRules: (rules: SortRule[]) => void;
-  beginCheckboxSelection: (id: string, event: React.PointerEvent<HTMLInputElement>) => void;
-  continueCheckboxSelection: (id: string, event: React.PointerEvent<HTMLInputElement>) => void;
+  beginCheckboxSelection: (id: string, event: React.PointerEvent<HTMLElement>) => void;
+  continueCheckboxSelection: (id: string, event: React.PointerEvent<HTMLElement>) => void;
   openTrackContextMenu: (track: TrackInfo, event: React.MouseEvent) => void;
   patchTrack: (id: string, patch: Partial<TrackInfo>) => void;
   patchLoopSample: (track: TrackInfo, field: "startSample" | "endSample", value: number) => void;
@@ -2547,7 +2970,7 @@ function ListEditorView(props: {
         <table className="data-table list-editor">
           <thead>
             <tr>
-              <th className="check-cell" />
+              <th className="check-cell">{ui(props.language, "selectColumn")}</th>
               {orderedColumns.map((column) => (
                 <th
                   key={column.key}
@@ -2576,7 +2999,11 @@ function ListEditorView(props: {
                 className={props.selectedIds.includes(track.id) ? "selected" : ""}
                 onContextMenu={(event) => props.openTrackContextMenu(track, event)}
               >
-                <td className="check-cell">
+                <td
+                  className="check-cell"
+                  onPointerDown={(event) => props.beginCheckboxSelection(track.id, event)}
+                  onPointerEnter={(event) => props.continueCheckboxSelection(track.id, event)}
+                >
                   <input
                     type="checkbox"
                     checked={props.selectedIds.includes(track.id)}
@@ -3008,6 +3435,8 @@ function displayValidation(validation: string, language: Language): string {
   if (detected) return `${detected[1]}% で検出しました。`;
   const noLoop = validation.match(/^No loop candidate reached ([\d.]+)%\.$/);
   if (noLoop) return `${noLoop[1]}% に達するループ候補が見つかりません。`;
+  const renamedSave = validation.match(/^Saved (.+) because (.+) already exists\.$/);
+  if (renamedSave) return `${renamedSave[2]} が既にあるため、${renamedSave[1]} として保存しました。`;
   const saved = validation.match(/^Saved (.+)\.$/);
   if (saved) return `${saved[1]} を保存しました。`;
   if (validation === "Loop metadata loaded.") return "ループメタデータを読み込みました。";
@@ -3021,6 +3450,8 @@ function displayValidation(validation: string, language: Language): string {
   if (validation === "Loop length pushes loop end past audio duration.") return "ループ長を適用するとループ終了が音声の長さを超えます。";
   if (validation === "Auto Loop canceled before this track finished.") return "このトラックの処理完了前に自動ループを中止しました。";
   if (validation === "Ready. Waveform preview uses browser MP3 decode support.") return "準備完了。波形プレビューはブラウザのMP3デコード機能を使います。";
+  if (validation === "Ready. Waveform preview requires FLAC decode support.") return "準備完了。波形プレビューはブラウザのFLACデコード機能を使います。";
+  if (validation === "Ready. Waveform preview requires Opus decode support.") return "準備完了。波形プレビューはブラウザのOpusデコード機能を使います。";
   if (validation === "MP3 loop markers can be used inside AutoLooper, but cannot be embedded when saving MP3 files.") {
     return "MP3のループマーカーはAutoLooper内では使えますが、MP3ファイルへ埋め込み保存はできません。";
   }
@@ -3069,6 +3500,8 @@ function bitDepthOrCodec(track: TrackInfo): number | string {
   if (track.bitDepth !== null) return track.bitDepth;
   if (track.format === "ogg") return "Vorbis";
   if (track.format === "mp3") return "MP3";
+  if (track.format === "flac") return "FLAC";
+  if (track.format === "opus") return "Opus";
   return "Compressed";
 }
 
@@ -3114,7 +3547,7 @@ function createDemoTracks(): TrackInfo[] {
       id: `demo-${index}`,
       filePath: `C:/Music/${fileName}`,
       fileName,
-      outputPath: `C:/Music/${fileName.replace(/\.(wav|aiff|ogg)$/i, "_looped.$1")}`,
+      outputPath: `C:/Music/${fileName.replace(/\.(wav|aiff|ogg|mp3|flac|opus)$/i, "_looped.$1")}`,
       format,
       sampleRate,
       bitDepth,

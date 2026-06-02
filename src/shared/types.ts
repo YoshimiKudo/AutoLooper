@@ -1,4 +1,6 @@
-export type AudioFormat = "wav" | "aiff" | "ogg" | "mp3";
+export type AudioFormat = "wav" | "aiff" | "ogg" | "mp3" | "flac" | "opus";
+
+export type DetectionMode = "normal" | "deep";
 
 export type TrackStatus =
   | "pending"
@@ -13,6 +15,7 @@ export type TrackStatus =
   | "error";
 
 export interface DetectionSettings {
+  mode: DetectionMode;
   matchWindowMs: number;
   matchThreshold: number;
   minimumLoopMs: number;
@@ -64,6 +67,11 @@ export interface SaveResult {
   outputPath: string;
   status: TrackStatus;
   validation: string;
+}
+
+export interface SaveOptions {
+  outputDirectory: string | null;
+  filenameSuffix: string;
 }
 
 export interface ImportResult {

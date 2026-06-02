@@ -203,13 +203,13 @@ select:focus {
 }
 
 .detect-progress.cancel-requested {
-  border-color: #c79235;
-  box-shadow: 0 24px 54px rgba(0, 0, 0, 0.45), 0 0 0 1px rgba(255, 196, 88, 0.24) inset;
+  border-color: #d85c66;
+  box-shadow: 0 24px 54px rgba(0, 0, 0, 0.45), 0 0 0 1px rgba(255, 112, 123, 0.25) inset;
 }
 
 .detect-progress.cancel-requested .spinner {
-  border-color: rgba(255, 209, 102, 0.32);
-  border-top-color: #ffd166;
+  border-color: rgba(255, 116, 126, 0.32);
+  border-top-color: #ff747e;
 }
 
 .detect-progress div {
@@ -241,7 +241,7 @@ select:focus {
 }
 
 .detect-progress .cancel-detail {
-  color: #ffd58b;
+  color: #ffb7bd;
 }
 
 .detect-progress i {
@@ -284,10 +284,10 @@ select:focus {
 }
 
 .detect-progress .progress-actions .cancel-detection.cancel-pending {
-  border-color: #ffd166;
-  color: #171209;
-  background: linear-gradient(#ffe08f, #ffb02e);
-  box-shadow: 0 0 0 1px rgba(255, 224, 143, 0.22), 0 0 18px rgba(255, 176, 46, 0.24);
+  border-color: #ff7a84;
+  color: #fff7f8;
+  background: linear-gradient(#8f3b46, #5a2830);
+  box-shadow: 0 0 0 1px rgba(255, 122, 132, 0.25), 0 0 18px rgba(255, 82, 96, 0.25);
   opacity: 1;
 }
 
@@ -314,6 +314,50 @@ select:focus {
 
   to {
     transform: translateX(1640px);
+  }
+}
+
+@keyframes deep-wave-diffusion-pulse {
+  0%, 100% {
+    opacity: 0.2;
+  }
+
+  38% {
+    opacity: 0.62;
+  }
+
+  64% {
+    opacity: 0.44;
+  }
+}
+
+@keyframes deep-scan-background-breathe {
+  0%, 100% {
+    opacity: 0.22;
+  }
+
+  50% {
+    opacity: 0.48;
+  }
+}
+
+@keyframes deep-scan-ripple {
+  0% {
+    opacity: 0;
+    transform: scale(0.55);
+  }
+
+  18% {
+    opacity: 0.22;
+  }
+
+  72% {
+    opacity: 0.08;
+  }
+
+  100% {
+    opacity: 0;
+    transform: scale(6.8);
   }
 }
 
@@ -440,6 +484,25 @@ select:focus {
   grid-template-rows: 54px 1fr;
 }
 
+.save-result-modal {
+  width: min(620px, calc(100vw - 60px));
+  max-height: calc(100vh - 80px);
+  display: grid;
+  grid-template-rows: 54px minmax(0, 1fr) 58px;
+}
+
+.save-confirm-modal {
+  width: min(520px, calc(100vw - 60px));
+  display: grid;
+  grid-template-rows: 54px minmax(0, 1fr) 58px;
+}
+
+.save-settings-modal {
+  width: min(540px, calc(100vw - 60px));
+  display: grid;
+  grid-template-rows: 54px minmax(0, 1fr);
+}
+
 .readme-modal header {
   display: flex;
   align-items: center;
@@ -455,6 +518,178 @@ select:focus {
 
 .readme-modal header button {
   min-height: 32px;
+}
+
+.save-settings-modal header,
+.save-result-modal header,
+.save-result-modal footer,
+.save-confirm-modal header,
+.save-confirm-modal footer {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 0 16px;
+  border-bottom: 1px solid #26343a;
+}
+
+.save-settings-modal header {
+  justify-content: space-between;
+}
+
+.save-result-modal footer,
+.save-confirm-modal footer {
+  justify-content: flex-end;
+  border-top: 1px solid #26343a;
+  border-bottom: 0;
+}
+
+.save-settings-modal-body {
+  padding: 16px;
+}
+
+.save-settings-modal .save-settings-section {
+  padding: 0;
+  border-bottom: 0;
+}
+
+.save-confirm-body {
+  padding: 18px 18px 16px;
+}
+
+.save-confirm-body h2 {
+  margin: 0 0 8px;
+  font-size: 20px;
+}
+
+.save-confirm-body p {
+  margin: 0 0 16px;
+  color: #aebfc5;
+}
+
+.save-confirm-body dl {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+}
+
+.save-confirm-body dl div {
+  display: grid;
+  grid-template-columns: 96px minmax(0, 1fr);
+  gap: 12px;
+  align-items: center;
+  padding: 9px 10px;
+  border: 1px solid #26343a;
+  border-radius: 6px;
+  background: #0d171c;
+}
+
+.save-confirm-body dt {
+  color: #91a4ac;
+  font-size: 13px;
+}
+
+.save-confirm-body dd {
+  margin: 0;
+  overflow: hidden;
+  color: #eef6f7;
+  font-weight: 700;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.save-confirm-body dd:has(.save-confirm-inline-input),
+.save-confirm-body dd:has(.save-confirm-value-button) {
+  overflow: visible;
+}
+
+.save-confirm-value-button {
+  width: 100%;
+  min-height: 34px;
+  justify-content: flex-start;
+  overflow: hidden;
+  border-color: transparent;
+  color: #eef6f7;
+  font-weight: 800;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  background: transparent;
+}
+
+.save-confirm-value-button:hover {
+  border-color: #2c5966;
+  background: rgba(43, 215, 233, 0.1);
+}
+
+.save-confirm-inline-input {
+  width: 100%;
+  min-height: 34px;
+  padding: 0 8px;
+  border: 1px solid #26343a;
+  border-radius: 5px;
+  color: #eef6f7;
+  font-size: 16px;
+  font-weight: 800;
+  background: #0b1419;
+}
+
+.save-confirm-warning {
+  margin: 12px 0 0;
+  padding: 9px 10px;
+  border: 1px solid rgba(255, 199, 71, 0.35);
+  border-radius: 6px;
+  color: #ffe1a0;
+  background: rgba(120, 82, 16, 0.18);
+}
+
+.save-result-body {
+  overflow: auto;
+  padding: 16px;
+}
+
+.save-result-body h2 {
+  margin: 0 0 12px;
+  font-size: 19px;
+}
+
+.save-result-counts {
+  display: flex;
+  gap: 12px;
+  margin-bottom: 12px;
+  color: #b9c8cd;
+}
+
+.save-result-counts span {
+  padding: 5px 8px;
+  border: 1px solid #26343a;
+  border-radius: 5px;
+  background: #0d171c;
+}
+
+.save-result-list {
+  display: grid;
+  gap: 8px;
+}
+
+.save-result-list p {
+  display: grid;
+  grid-template-columns: 112px minmax(0, 1fr);
+  gap: 6px 10px;
+  margin: 0;
+  padding: 9px;
+  border: 1px solid #26343a;
+  border-radius: 6px;
+  background: #0e181e;
+}
+
+.save-result-list span:not(.status-pill) {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.save-result-list small {
+  grid-column: 2;
+  color: #9fb0b8;
 }
 
 .readme-body {
@@ -613,8 +848,13 @@ select:focus {
 
 .data-table td:first-child,
 .data-table th:first-child {
-  width: 42px;
+  width: 54px;
+  padding: 0 6px;
   text-align: center;
+}
+
+.data-table th.check-cell {
+  font-size: 12px;
 }
 
 .data-table tr.selected td {
@@ -623,6 +863,18 @@ select:focus {
 
 .data-table tr:hover td {
   background: rgba(255, 255, 255, 0.035);
+}
+
+.data-table tr.selected:hover td {
+  background: rgba(48, 112, 160, 0.54);
+}
+
+.data-table td.check-cell:hover {
+  background: rgba(43, 215, 233, 0.12);
+}
+
+.data-table tr.selected td.check-cell:hover {
+  background: rgba(58, 132, 184, 0.66);
 }
 
 .data-table td svg {
@@ -669,6 +921,16 @@ select:focus {
 .badge.mp3 {
   color: #d8f8e2;
   background: #2f744d;
+}
+
+.badge.flac {
+  color: #dbf7ff;
+  background: #256d80;
+}
+
+.badge.opus {
+  color: #ffe1ef;
+  background: #7d3c68;
 }
 
 .format-cell {
@@ -776,6 +1038,44 @@ select:focus {
 .wave-path {
   fill: #c3ccd0;
   opacity: 0.82;
+}
+
+.deep-scan-background {
+  pointer-events: none;
+  animation: deep-scan-background-breathe 6s ease-in-out infinite;
+}
+
+.deep-scan-ripple-field {
+  pointer-events: none;
+}
+
+.deep-scan-ripple {
+  fill: rgba(43, 215, 233, 0.16);
+  stroke: none;
+  opacity: 0;
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: deep-scan-ripple 6s ease-out infinite;
+}
+
+.deep-scan-ripple.delay-1 {
+  animation-delay: 2s;
+}
+
+.deep-scan-ripple.delay-2 {
+  animation-delay: 4s;
+}
+
+.deep-wave-flow {
+  opacity: 0.78;
+  mix-blend-mode: screen;
+  filter: drop-shadow(0 0 12px rgba(43, 215, 233, 0.48));
+}
+
+.deep-wave-diffusion {
+  opacity: 0.62;
+  mix-blend-mode: screen;
+  animation: deep-wave-diffusion-pulse 5s ease-in-out infinite;
 }
 
 .waveform-scanning {
@@ -993,6 +1293,53 @@ select:focus {
 .inspector-section em {
   color: #7f929a;
   font-style: normal;
+}
+
+.save-field {
+  display: grid;
+  gap: 7px;
+  margin-bottom: 12px;
+}
+
+.save-field strong {
+  color: #eef6f7;
+  font-size: 13px;
+}
+
+.save-field small {
+  display: block;
+  margin-top: 2px;
+  color: #8fa3ab;
+  font-size: 12px;
+}
+
+.save-field p {
+  margin: 0;
+  padding: 7px 9px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  border: 1px solid #26343a;
+  border-radius: 5px;
+  color: #dbe9ec;
+  background: #0b1419;
+}
+
+.save-field-actions {
+  display: grid;
+  grid-template-columns: 1fr 74px;
+  gap: 7px;
+}
+
+.save-field-actions button {
+  min-height: 31px;
+  justify-content: center;
+  padding: 0 9px;
+}
+
+.invalid-input {
+  border-color: #ff6f61;
+  box-shadow: 0 0 0 2px rgba(255, 111, 97, 0.16);
 }
 
 .readout {
