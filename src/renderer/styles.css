@@ -788,9 +788,6 @@ select:focus {
 
 .scan-sweep {
   animation: scan-waveform 1.35s ease-in-out infinite;
-  transform-box: view-box;
-  transform-origin: 0 0;
-  will-change: transform;
 }
 
 .scan-label {
