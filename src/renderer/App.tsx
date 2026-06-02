@@ -112,6 +112,8 @@ const uiText = {
     importProgressDetail: "音声ファイルを解析しています",
     imported: "件読み込み",
     importedWithErrors: "件読み込み、エラー",
+    preparingWaveform: "波形を準備中",
+    waveformReady: "波形を準備しました",
     autoLooping: "自動ループ検出中",
     autoLoopComplete: "自動ループ完了",
     autoLoopCanceled: "自動ループを中止しました",
@@ -234,6 +236,8 @@ const uiText = {
     importProgressDetail: "Analyzing audio files",
     imported: "imported",
     importedWithErrors: "imported, errors",
+    preparingWaveform: "Preparing waveform",
+    waveformReady: "Waveform ready",
     autoLooping: "Auto looping",
     autoLoopComplete: "Auto Loop complete",
     autoLoopCanceled: "Auto Loop canceled",
@@ -543,6 +547,7 @@ export default function App(): React.ReactElement {
       setTracks((current) => [...current, ...result.tracks]);
       setSelectedIds([result.tracks[0].id]);
       setActiveTrackId(result.tracks[0].id);
+      void prepareWaveformPreviews(result.tracks);
     }
     setStatus(
       result.errors.length
@@ -558,6 +563,25 @@ export default function App(): React.ReactElement {
     } catch (error) {
       setStatus(error instanceof Error ? `${ui(language, "error")}: ${error.message}` : ui(language, "error"));
     }
+  }
+
+  async function prepareWaveformPreviews(importedTracks: TrackInfo[]): Promise<void> {
+    const targets = importedTracks.filter((track) => !track.waveform && usesWebAudioDetection(track.format));
+    if (targets.length === 0) return;
+    setStatus(`${ui(language, "preparingWaveform")}: ${targets[0].fileName}`);
+    for (const track of targets) {
+      try {
+        const patch = await decodeTrackPreview(track);
+        setTracks((current) => current.map((item) => (item.id === track.id ? { ...item, ...patch } : item)));
+      } catch (error) {
+        const validation = error instanceof Error ? `${track.format.toUpperCase()} decode failed: ${error.message}` : `${track.format.toUpperCase()} decode failed.`;
+        setTracks((current) =>
+          current.map((item) => (item.id === track.id ? { ...item, status: "warning", validation } : item))
+        );
+      }
+      await waitForUiFrame();
+    }
+    setStatus(`${ui(language, "waveformReady")}: ${targets.length}`);
   }
 
   function updateSettings(patch: Partial<DetectionSettings>): void {
@@ -1461,19 +1485,10 @@ function usesWebAudioDetection(format: AudioFormat): boolean {
 
 async function detectWithWebAudio(track: TrackInfo, settings: DetectionSettings): Promise<RendererDetection> {
   try {
-    audioContext ??= new AudioContext();
-    const data = await window.autoLooper.readAudioFile(track.filePath);
-    const decoded = await audioContext.decodeAudioData(data.slice(0));
+    const decoded = await decodeAudioTrack(track);
     const mono = downmixAudioBuffer(decoded);
     const candidate = findBestLoop(mono, decoded.sampleRate, settings, track.loop);
-    const waveform = buildRendererWaveform(decoded);
-    const patch: Partial<TrackInfo> = {
-      sampleRate: decoded.sampleRate,
-      channels: decoded.numberOfChannels,
-      durationSamples: decoded.length,
-      durationMs: decoded.duration * 1000,
-      waveform
-    };
+    const patch = decodedTrackPatch(decoded);
 
     if (!candidate) {
       return {
@@ -1514,6 +1529,27 @@ async function detectWithWebAudio(track: TrackInfo, settings: DetectionSettings)
       }
     };
   }
+}
+
+async function decodeTrackPreview(track: TrackInfo): Promise<Partial<TrackInfo>> {
+  const decoded = await decodeAudioTrack(track);
+  return decodedTrackPatch(decoded);
+}
+
+async function decodeAudioTrack(track: TrackInfo): Promise<AudioBuffer> {
+  audioContext ??= new AudioContext();
+  const data = await window.autoLooper.readAudioFile(track.filePath);
+  return audioContext.decodeAudioData(data.slice(0));
+}
+
+function decodedTrackPatch(decoded: AudioBuffer): Partial<TrackInfo> {
+  return {
+    sampleRate: decoded.sampleRate,
+    channels: decoded.numberOfChannels,
+    durationSamples: decoded.length,
+    durationMs: decoded.duration * 1000,
+    waveform: buildRendererWaveform(decoded)
+  };
 }
 
 function downmixAudioBuffer(buffer: AudioBuffer): Float32Array {
