@@ -2,7 +2,7 @@
 
 ## 日本語
 
-AutoLooper は、ゲーム音楽向けのループマーカー検出・編集デスクトップアプリです。WAV、AIFF、Ogg Vorbis ファイルを読み込み、最良のループ候補を自動採用し、波形表示とリストエディタの両方で確認・編集できます。
+AutoLooper は、ゲーム音楽向けのループマーカー検出・編集デスクトップアプリです。WAV、AIFF、Ogg Vorbis、MP3 ファイルを読み込み、最良のループ候補を自動採用し、波形表示とリストエディタの両方で確認・編集できます。
 
 ### ダウンロード
 
@@ -31,7 +31,7 @@ AutoLooper は、ゲーム音楽向けのループマーカー検出・編集デ
 
 現在のベータ版 exe はコード署名されていないため、初回起動時に Windows Defender SmartScreen の「Windows によって PC が保護されました」または「不明な発行元」の警告が出る場合があります。
 
-公式配布元は GitHub Releases のみです。ダウンロード元がこのリポジトリの Release であることを確認し、必要に応じて `SHA256SUMS.txt` でファイルの一致を確認してください。
+公式配布は GitHub Releases のみです。ダウンロード先がこのリポジトリの Release であることを確認し、必要に応じて `SHA256SUMS.txt` でファイルの一致を確認してください。
 
 警告画面から起動する場合:
 
@@ -42,8 +42,10 @@ AutoLooper は、ゲーム音楽向けのループマーカー検出・編集デ
 
 ### 主な機能
 
-- `.wav`、`.aif`、`.aiff`、`.ogg` の読み込み
+- `.wav`、`.aif`、`.aiff`、`.ogg`、`.mp3` の読み込み
 - Ogg は Vorbis を対象
+- MP3 は読み込み、波形表示、自動検出、手動マーカー編集、ループ再生に対応
+- MP3 へのループマーカー埋め込み保存は非対応。保存時に警告を表示
 - 複数ファイルの一括読み込みと一括検出
 - 最良候補を自動採用するループ検出
 - 波形上のループ開始・終了マーカー表示
@@ -113,6 +115,7 @@ npm.cmd run dist
 ### 注意
 
 - 自動保存は行いません。保存操作を実行したときだけ、ループ付きコピーを書き出します。
+- MP3 はループマーカーのアプリ内利用には対応しますが、MP3ファイル自体への埋め込み保存には対応しません。
 - ループ長などに無効な値を入力すると、トラック状態が警告になり、検証欄に理由が表示されます。
 - 現在の開発・検証環境は Windows です。macOS 対応は将来想定です。
 - 現在の exe はコード署名されていません。
@@ -126,13 +129,13 @@ npm.cmd run dist
 
 ### ライセンス
 
-ライセンス方針は未確定です。Public 公開する場合は、再利用を許可する範囲に応じて LICENSE ファイルを追加してください。
+ライセンス方針は未確定です。再利用条件を明確にする必要がある場合は、LICENSE ファイルを追加してください。
 
 ---
 
 ## English
 
-AutoLooper is a desktop app for detecting and editing loop markers in game music files. It imports WAV, AIFF, and Ogg Vorbis files, automatically adopts the best loop candidate, and lets you review and edit loop points in both waveform and list editor views.
+AutoLooper is a desktop app for detecting and editing loop markers in game music files. It imports WAV, AIFF, Ogg Vorbis, and MP3 files, automatically adopts the best loop candidate, and lets you review and edit loop points in both waveform and list editor views.
 
 ### Download
 
@@ -172,8 +175,10 @@ On company-managed PCs or environments with Smart App Control enabled, organizat
 
 ### Features
 
-- Import `.wav`, `.aif`, `.aiff`, and `.ogg` files
+- Import `.wav`, `.aif`, `.aiff`, `.ogg`, and `.mp3` files
 - Ogg support targets Vorbis
+- MP3 supports import, waveform display, automatic detection, manual marker editing, and loop playback
+- MP3 loop marker embedding is not supported. The app shows a warning when saving MP3 tracks
 - Batch import and batch detection
 - Automatic adoption of the best loop candidate
 - Waveform display with loop start and loop end markers
@@ -243,6 +248,7 @@ Build outputs are written to the `release` folder.
 ### Notes
 
 - The app does not autosave. Looped copies are written only when the save action is executed.
+- MP3 markers can be used inside the app, but cannot be embedded back into MP3 files.
 - Invalid loop length input sets the track status to warning and shows the reason in the validation column.
 - macOS support is planned for the future. Current development and verification are on Windows.
 - The current exe is not code-signed.
@@ -256,4 +262,4 @@ Build outputs are written to the `release` folder.
 
 ### License
 
-The license policy has not been decided yet. Add a LICENSE file before making the repository public if reuse terms need to be clear.
+The license policy has not been decided yet. Add a LICENSE file before publishing reuse terms.

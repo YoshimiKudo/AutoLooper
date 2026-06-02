@@ -1,7 +1,7 @@
 ﻿import React, { useEffect, useId, useMemo, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
 import { BookOpen, Copy, Crosshair, FileAudio, FolderOpen, Hash, Languages, Play, Repeat, Save, Search, Square, Table2, Trash2, Upload } from "lucide-react";
-import type { DetectionResult, DetectionSettings, TrackInfo, TrackStatus, WaveformPeaks } from "../shared/types";
+import type { AudioFormat, DetectionResult, DetectionSettings, TrackInfo, TrackStatus, WaveformPeaks } from "../shared/types";
 import { findBestLoop } from "../shared/detectCore";
 import { formatPercent, formatSamples, formatTime, msToSample, sampleToMs } from "../shared/format";
 import "./styles.css";
@@ -138,7 +138,7 @@ const uiText = {
     checkingLoop: "ループ確認中",
     stoppedRemoved: "削除したトラックの再生を停止",
     removedFromList: "件をリストから削除しました。音声ファイル自体は削除していません。",
-    emptyImport: "WAV、AIFF、Ogg Vorbis ファイルを読み込んでください。",
+    emptyImport: "WAV、AIFF、Ogg Vorbis、MP3 ファイルを読み込んでください。",
     play: "再生",
     stop: "停止",
     checkLoop: "ループ確認",
@@ -260,7 +260,7 @@ const uiText = {
     checkingLoop: "Checking loop",
     stoppedRemoved: "Stopped: removed track",
     removedFromList: "removed from the list. Files were not deleted.",
-    emptyImport: "Import WAV, AIFF, or Ogg Vorbis files.",
+    emptyImport: "Import WAV, AIFF, Ogg Vorbis, or MP3 files.",
     play: "Play",
     stop: "Stop",
     checkLoop: "Check Loop",
@@ -620,8 +620,8 @@ export default function App(): React.ReactElement {
         await waitForUiFrame();
 
         const rendererResult =
-          track.format === "ogg"
-            ? await detectOggWithWebAudio(track, settings)
+          usesWebAudioDetection(track.format)
+            ? await detectWithWebAudio(track, settings)
             : { result: (await window.autoLooper.detectTracks([track], settings))[0] };
         if (scanCancelRequestedRef.current) {
           canceled = true;
@@ -1455,7 +1455,11 @@ function renderInlineMarkdown(text: string): React.ReactNode[] {
 
 let audioContext: AudioContext | null = null;
 
-async function detectOggWithWebAudio(track: TrackInfo, settings: DetectionSettings): Promise<RendererDetection> {
+function usesWebAudioDetection(format: AudioFormat): boolean {
+  return format === "ogg" || format === "mp3";
+}
+
+async function detectWithWebAudio(track: TrackInfo, settings: DetectionSettings): Promise<RendererDetection> {
   try {
     audioContext ??= new AudioContext();
     const data = await window.autoLooper.readAudioFile(track.filePath);
@@ -1506,7 +1510,7 @@ async function detectOggWithWebAudio(track: TrackInfo, settings: DetectionSettin
         id: track.id,
         loop: track.loop,
         status: "error",
-        validation: error instanceof Error ? `Ogg decode failed: ${error.message}` : "Ogg decode failed."
+        validation: error instanceof Error ? `${track.format.toUpperCase()} decode failed: ${error.message}` : `${track.format.toUpperCase()} decode failed.`
       }
     };
   }
@@ -2223,7 +2227,7 @@ function ListEditorView(props: {
       case "sampleRate":
         return track.sampleRate;
       case "bitDepth":
-        return track.bitDepth ?? "Vorbis";
+        return bitDepthOrCodec(track);
       case "durationSamples":
         return formatTrackDuration(track, props.displayUnit);
       case "loopStart":
@@ -2443,7 +2447,7 @@ function listCellText(track: TrackInfo, columnKey: ListColumnKey, displayUnit: D
     case "sampleRate":
       return String(track.sampleRate);
     case "bitDepth":
-      return track.bitDepth === null ? "Vorbis" : String(track.bitDepth);
+      return String(bitDepthOrCodec(track));
     case "durationSamples":
       return displayUnit === "samples" ? String(track.durationSamples) : formatTime(track.durationMs);
     case "loopStart":
@@ -2749,6 +2753,10 @@ function displayValidation(validation: string, language: Language): string {
   if (validation === "Loop length must be greater than zero.") return "ループ長は0より大きい値にしてください。";
   if (validation === "Loop length pushes loop end past audio duration.") return "ループ長を適用するとループ終了が音声の長さを超えます。";
   if (validation === "Auto Loop canceled before this track finished.") return "このトラックの処理完了前に自動ループを中止しました。";
+  if (validation === "Ready. Waveform preview uses browser MP3 decode support.") return "準備完了。波形プレビューはブラウザのMP3デコード機能を使います。";
+  if (validation === "MP3 loop markers can be used inside AutoLooper, but cannot be embedded when saving MP3 files.") {
+    return "MP3のループマーカーはAutoLooper内では使えますが、MP3ファイルへ埋め込み保存はできません。";
+  }
   const invalidLength = validation.match(/^Invalid loop length input: ?(.*)$/);
   if (invalidLength) return `ループ長の入力値が不正です: ${invalidLength[1] || "空の入力"}`;
   if (validation === "Updated from TSV paste.") return "TSV貼り付けから更新しました。";
@@ -2787,7 +2795,14 @@ function formatKhz(sampleRate: number): string {
 }
 
 function formatDetails(track: TrackInfo): string {
-  return `${formatKhz(track.sampleRate)} / ${track.bitDepth ? `${track.bitDepth}-bit` : "Vorbis"}`;
+  return `${formatKhz(track.sampleRate)} / ${bitDepthOrCodec(track)}${track.bitDepth !== null ? "-bit" : ""}`;
+}
+
+function bitDepthOrCodec(track: TrackInfo): number | string {
+  if (track.bitDepth !== null) return track.bitDepth;
+  if (track.format === "ogg") return "Vorbis";
+  if (track.format === "mp3") return "MP3";
+  return "Compressed";
 }
 
 function statusLabel(status: TrackStatus, language: Language): string {

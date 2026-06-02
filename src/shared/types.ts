@@ -1,4 +1,4 @@
-export type AudioFormat = "wav" | "aiff" | "ogg";
+export type AudioFormat = "wav" | "aiff" | "ogg" | "mp3";
 
 export type TrackStatus =
   | "pending"
