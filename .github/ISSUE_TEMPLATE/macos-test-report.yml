@@ -1,0 +1,91 @@
+name: macOS experimental report
+description: macOS実験版の起動・動作報告
+title: "[macOS] "
+body:
+  - type: markdown
+    attributes:
+      value: |
+        AutoLooper macOS experimental build の報告用テンプレートです。
+        作者はMac実機で検証できていないため、環境と再現手順をできるだけ具体的に書いてください。
+
+  - type: input
+    id: macos-version
+    attributes:
+      label: macOS version
+      description: 例: macOS 15.5
+    validations:
+      required: true
+
+  - type: dropdown
+    id: mac-type
+    attributes:
+      label: Mac type
+      options:
+        - Apple Silicon
+        - Intel
+        - Unknown
+    validations:
+      required: true
+
+  - type: input
+    id: asset
+    attributes:
+      label: Downloaded file
+      description: 例: AutoLooper.0.4.0.mac.dmg
+    validations:
+      required: true
+
+  - type: dropdown
+    id: launch
+    attributes:
+      label: Launch result
+      options:
+        - Launches
+        - Blocked by Gatekeeper
+        - Crashes on launch
+        - Does not open
+    validations:
+      required: true
+
+  - type: textarea
+    id: behavior
+    attributes:
+      label: What happened?
+      description: 起きたこと、表示された警告、エラーメッセージを書いてください。
+    validations:
+      required: true
+
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Steps to reproduce
+      description: 再現手順を書いてください。
+      placeholder: |
+        1. Open AutoLooper
+        2. Import ...
+        3. Click ...
+    validations:
+      required: false
+
+  - type: textarea
+    id: feature-check
+    attributes:
+      label: Feature check
+      description: 試せた範囲だけで構いません。
+      value: |
+        - Import:
+        - Playback:
+        - Auto loop detection:
+        - Check Loop:
+        - Save looped copy:
+        - Drag and drop:
+    validations:
+      required: false
+
+  - type: textarea
+    id: notes
+    attributes:
+      label: Notes
+      description: スクリーンショット、動画、ログ、補足情報があれば書いてください。
+    validations:
+      required: false

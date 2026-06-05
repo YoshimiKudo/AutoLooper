@@ -1,0 +1,72 @@
+name: macOS experimental build
+
+on:
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: "Release tag to create or update"
+        required: true
+        default: "v0.4.0-macos-experimental"
+      publish_release:
+        description: "Upload the macOS artifacts to GitHub Releases"
+        required: true
+        type: boolean
+        default: true
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: Build unsigned macOS universal app
+    runs-on: macos-14
+    env:
+      CSC_IDENTITY_AUTO_DISCOVERY: "false"
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run tests
+        run: npm test
+
+      - name: Build macOS experimental app
+        run: npm run dist:mac
+
+      - name: Create checksums
+        run: |
+          shasum -a 256 release/AutoLooper.*.mac.dmg release/AutoLooper.*.mac.zip > release/SHA256SUMS-mac.txt
+
+      - name: Upload workflow artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: AutoLooper-macOS-experimental
+          path: |
+            release/AutoLooper.*.mac.dmg
+            release/AutoLooper.*.mac.zip
+            release/SHA256SUMS-mac.txt
+          if-no-files-found: error
+
+      - name: Publish GitHub Release assets
+        if: ${{ inputs.publish_release }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ inputs.release_tag }}
+        run: |
+          if gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
+            gh release upload "$RELEASE_TAG" release/AutoLooper.*.mac.dmg release/AutoLooper.*.mac.zip release/SHA256SUMS-mac.txt --clobber
+          else
+            gh release create "$RELEASE_TAG" release/AutoLooper.*.mac.dmg release/AutoLooper.*.mac.zip release/SHA256SUMS-mac.txt \
+              --target "$GITHUB_SHA" \
+              --title "AutoLooper v0.4.0 macOS experimental" \
+              --notes-file docs/macos-experimental-release-notes.md \
+              --prerelease
+          fi
