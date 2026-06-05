@@ -1,6 +1,7 @@
 name: macOS experimental report
 description: macOS実験版の起動・動作報告
 title: "[macOS] "
+labels: ["macOS", "experimental", "user-report"]
 body:
   - type: markdown
     attributes:
