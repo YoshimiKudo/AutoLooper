@@ -40,7 +40,7 @@ export async function importAudioFiles(filePaths: string[]): Promise<ImportResul
         continue;
       }
 
-      const fileName = path.basename(filePath);
+      const fileName = basenameForPath(filePath);
       tracks.push({
         id: crypto.randomUUID(),
         filePath,
@@ -102,8 +102,8 @@ export async function saveLoopedCopy(track: TrackInfo, options: SaveOptions = de
     await fs.writeFile(outputPath, output);
     const validation =
       outputPath === intendedOutputPath
-        ? `Saved ${path.basename(outputPath)}.`
-        : `Saved ${path.basename(outputPath)} because ${path.basename(intendedOutputPath)} already exists.`;
+        ? `Saved ${basenameForPath(outputPath)}.`
+        : `Saved ${basenameForPath(outputPath)} because ${basenameForPath(intendedOutputPath)} already exists.`;
     return {
       id: track.id,
       outputPath,
@@ -126,20 +126,35 @@ const defaultSaveOptions: SaveOptions = {
 };
 
 export function makeLoopedOutputPath(filePath: string, options: SaveOptions = defaultSaveOptions): string {
-  const parsed = path.parse(filePath);
+  const sourcePath = pathFor(filePath);
+  const parsed = sourcePath.parse(filePath);
   const outputDirectory = options.outputDirectory || parsed.dir;
-  return path.join(outputDirectory, `${parsed.name}${options.filenameSuffix}${parsed.ext}`);
+  const outputPath = pathFor(outputDirectory || filePath);
+  return outputPath.join(outputDirectory, `${parsed.name}${options.filenameSuffix}${parsed.ext}`);
 }
 
 async function nextAvailablePath(filePath: string): Promise<string> {
-  const parsed = path.parse(filePath);
+  const pathModule = pathFor(filePath);
+  const parsed = pathModule.parse(filePath);
   let candidate = filePath;
   let index = 2;
   while (await exists(candidate)) {
-    candidate = path.join(parsed.dir, `${parsed.name}_${index}${parsed.ext}`);
+    candidate = pathModule.join(parsed.dir, `${parsed.name}_${index}${parsed.ext}`);
     index += 1;
   }
   return candidate;
+}
+
+function basenameForPath(filePath: string): string {
+  return pathFor(filePath).basename(filePath);
+}
+
+function pathFor(filePath: string): path.PlatformPath {
+  return isWindowsLikePath(filePath) ? path.win32 : path.posix;
+}
+
+function isWindowsLikePath(filePath: string): boolean {
+  return /^[a-zA-Z]:[\\/]/.test(filePath) || filePath.includes("\\");
 }
 
 async function exists(filePath: string): Promise<boolean> {
