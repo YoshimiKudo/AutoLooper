@@ -12,8 +12,8 @@
     "build": "tsc -p tsconfig.electron.json && tsc -p tsconfig.json && vite build",
     "dist:dir": "npm run build && electron-builder --win dir --x64",
     "dist": "npm run build && electron-builder --win portable --x64",
-    "dist:mac:dir": "npm run build && electron-builder --mac dir --universal",
-    "dist:mac": "npm run build && electron-builder --mac",
+    "dist:mac:dir": "npm run build && electron-builder --mac dir --universal --publish never",
+    "dist:mac": "npm run build && electron-builder --mac --publish never",
     "test": "vitest run",
     "preview": "vite preview --host 127.0.0.1"
   },
