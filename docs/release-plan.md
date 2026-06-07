@@ -72,6 +72,26 @@ Gitはソースコードと変更履歴の管理に使い、配布はGitHub Rele
 
 macOSで正式配布する場合は、署名とnotarizationを前提にします。Windowsと同じ配布手順では済まないため、別途ビルド環境、Apple Developer Program、証明書管理が必要です。
 
+## macOS実験版フィードバックメモ
+
+2026-06-06 JST 時点の初回検証報告では、Mac Studio 2022 / M1 Ultra / macOS Sequoia 15.7.7 で基本動作、Normal / Deep 検出、Unityでのループ再生、通信なしが確認されました。
+
+v0.4.1 macOS experimental で対応:
+
+- `AutoLooper > Quit AutoLooper` と `Cmd+Q` のQuitメニューを追加する。
+- macOSでClose Window後にアプリを終了できる導線を明確にする。
+- README / Release notes に「DMGでダウンロードできない場合はZIPを試す」を追記する。
+- README / Release notes にmacOSでの終了方法、Gatekeeper回避、ZIP代替導線を追記する。
+
+保留 / 非採用:
+
+- 上書き保存は現時点では実装しない。元ファイル破壊リスクが高く、コピー保存を基本とする現在の安全設計と衝突するため。将来検討する場合は、バックアップ、復旧、明示的な確認ダイアログ、MP3など保存不可形式の扱いを先に設計する。
+
+運用:
+
+- 2026-06-06 から約3日間、macOS実験版への反応とIssueを観察する。
+- 追加報告をまとめてから、次のmacOS実験版アップデートとして反映する。
+
 ## 参考
 
 - GitHub Docs: About releases  
@@ -84,4 +104,3 @@ macOSで正式配布する場合は、署名とnotarizationを前提にします
   https://www.electronjs.org/docs/latest/tutorial/code-signing
 - Microsoft Learn: SmartScreen reputation  
   https://learn.microsoft.com/en-us/windows/apps/package-and-deploy/smartscreen-reputation
-

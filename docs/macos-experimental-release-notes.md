@@ -1,10 +1,10 @@
 ## Download / ダウンロード
 
-**macOS Universal DMG**: [AutoLooper.0.4.0.mac.dmg](https://github.com/YoshimiKudo/AutoLooper/releases/download/v0.4.0-macos-experimental/AutoLooper.0.4.0.mac.dmg)
+**macOS Universal DMG**: [AutoLooper.0.4.1.mac.dmg](https://github.com/YoshimiKudo/AutoLooper/releases/download/v0.4.1-macos-experimental/AutoLooper.0.4.1.mac.dmg)
 
-**macOS Universal ZIP**: [AutoLooper.0.4.0.mac.zip](https://github.com/YoshimiKudo/AutoLooper/releases/download/v0.4.0-macos-experimental/AutoLooper.0.4.0.mac.zip)
+**macOS Universal ZIP**: [AutoLooper.0.4.1.mac.zip](https://github.com/YoshimiKudo/AutoLooper/releases/download/v0.4.1-macos-experimental/AutoLooper.0.4.1.mac.zip)
 
-**Checksum**: [SHA256SUMS-mac.txt](https://github.com/YoshimiKudo/AutoLooper/releases/download/v0.4.0-macos-experimental/SHA256SUMS-mac.txt)
+**Checksum**: [SHA256SUMS-mac.txt](https://github.com/YoshimiKudo/AutoLooper/releases/download/v0.4.1-macos-experimental/SHA256SUMS-mac.txt)
 
 ## Important Notes / 重要な注意
 
@@ -25,6 +25,14 @@ macOS Gatekeeper may block this app because it is unsigned.
 
 未署名アプリのため、macOSのGatekeeperで起動が止められる場合があります。
 
+If the DMG download fails in Safari, try downloading the ZIP instead.
+
+SafariでDMGのダウンロードに失敗する場合は、ZIP版を試してください。
+
+To quit the app on macOS, use `AutoLooper > Quit AutoLooper` or `Cmd+Q`. Closing the window may keep the app running, which is normal macOS behavior.
+
+macOSでアプリを終了する場合は、`AutoLooper > Quit AutoLooper` または `Cmd+Q` を使ってください。ウィンドウを閉じてもアプリが起動したままになるのはmacOSの通常動作です。
+
 ## Main Features / 主な機能
 
 - WAV / AIFF / Ogg Vorbis / MP3 / FLAC / Opus import
@@ -33,6 +41,14 @@ macOS Gatekeeper may block this app because it is unsigned.
 - Loop playback and `Check Loop`
 - Loop marker saving for supported metadata formats
 - MP3 marker editing inside the app, with save warning because MP3 marker embedding is not supported
+
+## Changes in v0.4.1 / v0.4.1 の変更点
+
+- Added the macOS app menu with `Quit AutoLooper` / `Cmd+Q`.
+- Added notes recommending the ZIP download if the DMG download fails in Safari.
+
+- macOSアプリメニューに `Quit AutoLooper` / `Cmd+Q` を追加しました。
+- SafariでDMGのダウンロードに失敗する場合はZIP版を試す案内を追加しました。
 
 ## Feedback / 不具合報告
 

@@ -201,6 +201,24 @@ app.whenReady().then(() => {
 
 function createApplicationMenu(): void {
   const template: MenuItemConstructorOptions[] = [
+    ...(process.platform === "darwin"
+      ? [
+          {
+            label: app.name,
+            submenu: [
+              { role: "about" },
+              { type: "separator" },
+              { role: "services" },
+              { type: "separator" },
+              { role: "hide" },
+              { role: "hideOthers" },
+              { role: "unhide" },
+              { type: "separator" },
+              { role: "quit" }
+            ]
+          } satisfies MenuItemConstructorOptions
+        ]
+      : []),
     {
       label: "File",
       submenu: [

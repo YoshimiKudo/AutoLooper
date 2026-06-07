@@ -4,7 +4,9 @@
 
 **Windows版アプリ本体**: [AutoLooper.0.4.0.exe](https://github.com/YoshimiKudo/AutoLooper/releases/download/v0.4.0-beta/AutoLooper.0.4.0.exe)
 
-**macOS実験版（未署名・作者未検証）**: [AutoLooper.0.4.0.mac.dmg](https://github.com/YoshimiKudo/AutoLooper/releases/download/v0.4.0-macos-experimental/AutoLooper.0.4.0.mac.dmg)
+**macOS実験版（未署名・作者未検証）**: [AutoLooper.0.4.1.mac.dmg](https://github.com/YoshimiKudo/AutoLooper/releases/download/v0.4.1-macos-experimental/AutoLooper.0.4.1.mac.dmg)
+
+**macOS実験版 ZIP**: [AutoLooper.0.4.1.mac.zip](https://github.com/YoshimiKudo/AutoLooper/releases/download/v0.4.1-macos-experimental/AutoLooper.0.4.1.mac.zip)
 
 最新版のリリースページ: [AutoLooper Releases](https://github.com/YoshimiKudo/AutoLooper/releases)
 
@@ -19,9 +21,10 @@ AutoLooper は、ゲーム音楽向けのループマーカー検出・編集デ
 
 ### バージョン情報
 
-- アプリバージョン: `0.4.0`
-- リリースタグ: `v0.4.0-beta`
-- リリース日: `2026-06-03` JST
+- Windows版: `0.4.0` / `v0.4.0-beta`
+- macOS実験版: `0.4.1` / `v0.4.1-macos-experimental`
+- Windows版リリース日: `2026-06-03` JST
+- macOS実験版リリース日: `2026-06-08` JST
 - 種別: ベータ / プレリリース
 - 対応環境: Windows
 - macOS: 実験版あり（未署名・作者Mac実機未検証）
@@ -121,6 +124,10 @@ macOS版は未署名の実験版です。作者は現在Mac実機の検証環境
 
 未署名アプリのため、macOSのGatekeeperで起動が止められる場合があります。起動する場合は、右クリックから `開く` を選ぶか、`システム設定 > プライバシーとセキュリティ` を確認してください。
 
+SafariでDMGのダウンロードに失敗する場合は、ZIP版を試してください。
+
+macOSでアプリを終了する場合は、`AutoLooper > Quit AutoLooper` または `Cmd+Q` を使ってください。ウィンドウを閉じてもアプリが起動したままになるのはmacOSの通常動作です。
+
 ### 開発用起動
 
 ```bat
@@ -149,9 +156,10 @@ AutoLooper is a desktop app for detecting, editing, previewing, and saving loop 
 
 ### Version
 
-- App version: `0.4.0`
-- Release tag: `v0.4.0-beta`
-- Release date: `2026-06-03` JST
+- Windows build: `0.4.0` / `v0.4.0-beta`
+- macOS experimental build: `0.4.1` / `v0.4.1-macos-experimental`
+- Windows release date: `2026-06-03` JST
+- macOS experimental release date: `2026-06-08` JST
 - Type: beta / pre-release
 - Target platform: Windows
 - macOS: experimental unsigned build available, not manually verified by the author on real Mac hardware
@@ -250,6 +258,10 @@ If the app cannot launch, is blocked by Gatekeeper, or has import, playback, det
 When reporting, include the macOS version, Intel / Apple Silicon, downloaded file, launch result, and the exact operation that caused the problem.
 
 Because the app is unsigned, macOS Gatekeeper may block it. If you decide to run it, try right-clicking the app and selecting `Open`, or check `System Settings > Privacy & Security`.
+
+If the DMG download fails in Safari, try downloading the ZIP build instead.
+
+To quit the app on macOS, use `AutoLooper > Quit AutoLooper` or `Cmd+Q`. Closing the window may keep the app running, which is normal macOS behavior.
 
 ### Development
 
