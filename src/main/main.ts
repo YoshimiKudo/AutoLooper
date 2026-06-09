@@ -55,10 +55,24 @@ function isAllowedNavigationUrl(url: string): boolean {
   return url.startsWith("file://");
 }
 
-app.whenReady().then(() => {
-  session.defaultSession.setPermissionRequestHandler((_webContents, _permission, callback) => {
-    callback(false);
+function configurePermissions(): void {
+  session.defaultSession.setPermissionCheckHandler((webContents, permission) => {
+    const url = webContents?.getURL() ?? "";
+    return isAllowedNavigationUrl(url) && isAllowedSessionPermission(permission);
   });
+
+  session.defaultSession.setPermissionRequestHandler((webContents, permission, callback) => {
+    const url = webContents.getURL();
+    callback(isAllowedNavigationUrl(url) && isAllowedSessionPermission(permission));
+  });
+}
+
+function isAllowedSessionPermission(permission: string): boolean {
+  return permission === "clipboard-read" || permission === "clipboard-sanitized-write";
+}
+
+app.whenReady().then(() => {
+  configurePermissions();
   createApplicationMenu();
 
   ipcMain.handle("tracks:import", async (event) => {

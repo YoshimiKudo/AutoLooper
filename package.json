@@ -1,6 +1,6 @@
 {
   "name": "autolooper",
-  "version": "0.4.1",
+  "version": "0.4.2",
   "private": true,
   "description": "Desktop batch loop marker editor for game music files.",
   "main": "dist-electron/main/main.js",
