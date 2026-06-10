@@ -1,5 +1,5 @@
 import { contextBridge, ipcRenderer, webUtils } from "electron";
-import type { DetectionResult, DetectionSettings, ImportResult, SaveOptions, SaveResult, TrackInfo } from "../shared/types.js";
+import type { AppPreferences, DetectionResult, DetectionSettings, ImportResult, SaveOptions, SaveResult, TrackInfo } from "../shared/types.js";
 
 type DropImportCallback = (result: ImportResult) => void;
 type FileDragStateCallback = (active: boolean) => void;
@@ -34,6 +34,8 @@ const api = {
   },
   readAudioFile: (filePath: string) => ipcRenderer.invoke("tracks:read-file", filePath) as Promise<ArrayBuffer>,
   getReadme: () => ipcRenderer.invoke("app:get-readme") as Promise<string>,
+  getPreferences: () => ipcRenderer.invoke("app:get-preferences") as Promise<AppPreferences>,
+  savePreferences: (preferences: AppPreferences) => ipcRenderer.invoke("app:save-preferences", preferences) as Promise<void>,
   detectTracks: (tracks: TrackInfo[], settings: DetectionSettings) =>
     ipcRenderer.invoke("tracks:detect", tracks, settings) as Promise<DetectionResult[]>,
   saveLoopedCopies: (tracks: TrackInfo[], options: SaveOptions) =>

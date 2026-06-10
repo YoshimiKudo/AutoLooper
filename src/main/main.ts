@@ -2,7 +2,8 @@ import { app, BrowserWindow, dialog, ipcMain, Menu, session, shell } from "elect
 import type { MenuItemConstructorOptions, OpenDialogOptions } from "electron";
 import fs from "node:fs/promises";
 import path from "node:path";
-import type { DetectionSettings, ImportResult, LoopMarker, SaveOptions, TrackInfo } from "../shared/types.js";
+import { defaultAppPreferences } from "../shared/defaults.js";
+import type { AppPreferences, DetectionPreset, DetectionSettings, DisplayUnit, ImportResult, Language, LoopMarker, SaveOptions, TrackInfo } from "../shared/types.js";
 import { detectTrackLoop } from "./services/detect.js";
 import { importAudioFiles, saveLoopedCopy } from "./services/files.js";
 import { readLimitedAudioFile } from "./services/limits.js";
@@ -202,6 +203,14 @@ app.whenReady().then(() => {
 
   ipcMain.handle("app:get-readme", async () => {
     return fs.readFile(path.join(app.getAppPath(), "README.md"), "utf8");
+  });
+
+  ipcMain.handle("app:get-preferences", async () => {
+    return readAppPreferences();
+  });
+
+  ipcMain.handle("app:save-preferences", async (_event, preferences: unknown) => {
+    await writeAppPreferences(preferences);
   });
 
   createWindow();
@@ -444,4 +453,67 @@ function clampNumber(value: unknown, min: number, max: number, fallback: number)
     return fallback;
   }
   return Math.min(max, Math.max(min, value));
+}
+
+function preferencesPath(): string {
+  return path.join(app.getPath("userData"), "preferences.json");
+}
+
+async function readAppPreferences(): Promise<AppPreferences> {
+  try {
+    const raw = await fs.readFile(preferencesPath(), "utf8");
+    return sanitizeAppPreferences(JSON.parse(raw));
+  } catch {
+    return cloneDefaultPreferences();
+  }
+}
+
+async function writeAppPreferences(value: unknown): Promise<void> {
+  const preferences = sanitizeAppPreferences(value);
+  await fs.mkdir(path.dirname(preferencesPath()), { recursive: true });
+  await fs.writeFile(preferencesPath(), `${JSON.stringify(preferences, null, 2)}\n`, "utf8");
+}
+
+function sanitizeAppPreferences(value: unknown): AppPreferences {
+  if (!value || typeof value !== "object") {
+    return cloneDefaultPreferences();
+  }
+
+  const incoming = value as Partial<AppPreferences>;
+  const saveOptions = sanitizeSaveOptions(incoming.saveOptions);
+  return {
+    language: sanitizeLanguage(incoming.language),
+    displayUnit: sanitizeDisplayUnit(incoming.displayUnit),
+    detectionPreset: sanitizeDetectionPreset(incoming.detectionPreset),
+    detectionSettings: sanitizeDetectionSettings(incoming.detectionSettings),
+    customDetectionSettings: incoming.customDetectionSettings
+      ? sanitizeDetectionSettings(incoming.customDetectionSettings)
+      : null,
+    saveOptions: saveOptions.ok ? saveOptions.options : { ...defaultAppPreferences.saveOptions }
+  };
+}
+
+function sanitizeLanguage(value: unknown): Language {
+  return value === "en" || value === "ja" ? value : defaultAppPreferences.language;
+}
+
+function sanitizeDisplayUnit(value: unknown): DisplayUnit {
+  return value === "time" || value === "samples" ? value : defaultAppPreferences.displayUnit;
+}
+
+function sanitizeDetectionPreset(value: unknown): DetectionPreset {
+  return value === "normal" || value === "deep" || value === "custom"
+    ? value
+    : defaultAppPreferences.detectionPreset;
+}
+
+function cloneDefaultPreferences(): AppPreferences {
+  return {
+    ...defaultAppPreferences,
+    detectionSettings: { ...defaultAppPreferences.detectionSettings },
+    customDetectionSettings: defaultAppPreferences.customDetectionSettings
+      ? { ...defaultAppPreferences.customDetectionSettings }
+      : null,
+    saveOptions: { ...defaultAppPreferences.saveOptions }
+  };
 }

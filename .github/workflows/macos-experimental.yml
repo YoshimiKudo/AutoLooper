@@ -6,7 +6,7 @@ on:
       release_tag:
         description: "Release tag to create or update"
         required: true
-        default: "v0.4.2-macos-experimental"
+        default: "v0.4.3-macos-experimental"
       publish_release:
         description: "Upload the macOS artifacts to GitHub Releases"
         required: true
@@ -67,7 +67,7 @@ jobs:
           else
             gh release create "$RELEASE_TAG" release/AutoLooper.*.mac.dmg release/AutoLooper.*.mac.zip release/SHA256SUMS-mac.txt \
               --target "$GITHUB_SHA" \
-              --title "AutoLooper v0.4.2-beta macOS experimental" \
+              --title "AutoLooper v0.4.3-beta macOS experimental" \
               --notes-file docs/macos-experimental-release-notes.md \
               --prerelease
           fi

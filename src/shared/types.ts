@@ -1,6 +1,9 @@
 export type AudioFormat = "wav" | "aiff" | "ogg" | "mp3" | "flac" | "opus";
 
 export type DetectionMode = "normal" | "deep";
+export type DetectionPreset = "normal" | "deep" | "custom";
+export type DisplayUnit = "samples" | "time";
+export type Language = "ja" | "en";
 
 export type TrackStatus =
   | "pending"
@@ -72,6 +75,15 @@ export interface SaveResult {
 export interface SaveOptions {
   outputDirectory: string | null;
   filenameSuffix: string;
+}
+
+export interface AppPreferences {
+  language: Language;
+  displayUnit: DisplayUnit;
+  detectionPreset: DetectionPreset;
+  detectionSettings: DetectionSettings;
+  customDetectionSettings: DetectionSettings | null;
+  saveOptions: SaveOptions;
 }
 
 export interface ImportResult {

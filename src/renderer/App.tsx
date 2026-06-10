@@ -1,17 +1,15 @@
 ﻿import React, { useEffect, useId, useMemo, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
 import { BookOpen, Copy, Crosshair, FileAudio, FolderOpen, Hash, Languages, Play, Redo2, Repeat, Save, Search, Square, Table2, Trash2, Undo2, Upload } from "lucide-react";
-import type { AudioFormat, DetectionResult, DetectionSettings, SaveOptions, SaveResult, TrackInfo, TrackStatus, WaveformPeaks } from "../shared/types";
+import type { AppPreferences, AudioFormat, DetectionPreset, DetectionResult, DetectionSettings, DisplayUnit, Language, SaveOptions, SaveResult, TrackInfo, TrackStatus, WaveformPeaks } from "../shared/types";
 import type { LoopCandidate } from "../shared/detectCore";
+import { defaultAppPreferences, defaultDetectionSettings, defaultSaveOptions } from "../shared/defaults";
 import { formatPercent, formatSamples, formatTime, msToSample, sampleToMs } from "../shared/format";
 import "./styles.css";
 
 type ViewMode = "waveform" | "list";
 type SortDirection = "asc" | "desc";
 type PlaybackKind = "track" | "loop-check";
-type Language = "ja" | "en";
-type DetectionPreset = "normal" | "deep" | "custom";
-type DisplayUnit = "samples" | "time";
 
 interface PlaybackSession {
   source: AudioBufferSourceNode;
@@ -71,24 +69,12 @@ interface TrackHistoryTransaction {
   used: boolean;
 }
 
-const defaultSettings: DetectionSettings = {
-  mode: "normal",
-  matchWindowMs: 1500,
-  matchThreshold: 88,
-  minimumLoopMs: 3000,
-  loopCheckPrerollMs: 1000
-};
-
 const detectionPresets: Record<Exclude<DetectionPreset, "custom">, DetectionSettings> = {
-  normal: { mode: "normal", matchWindowMs: 1500, matchThreshold: 88, minimumLoopMs: 3000, loopCheckPrerollMs: 1000 },
-  deep: { mode: "deep", matchWindowMs: 1500, matchThreshold: 88, minimumLoopMs: 3000, loopCheckPrerollMs: 1000 }
+  normal: defaultDetectionSettings,
+  deep: { ...defaultDetectionSettings, mode: "deep" }
 };
 
 const customPresetStorageKey = "autolooper.customDetectionPreset.v1";
-const defaultSaveOptions: SaveOptions = {
-  outputDirectory: null,
-  filenameSuffix: "_looped"
-};
 const playbackFadeMs = 24;
 const maxTrackHistoryEntries = 100;
 
@@ -484,15 +470,16 @@ function resolveActiveTrackId(activeTrackId: string | null, selectedIds: string[
 
 export default function App(): React.ReactElement {
   const demoTracks = useMemo(() => createDemoTracks(), []);
-  const [language, setLanguage] = useState<Language>("ja");
-  const [displayUnit, setDisplayUnit] = useState<DisplayUnit>("samples");
+  const [language, setLanguage] = useState<Language>(defaultAppPreferences.language);
+  const [displayUnit, setDisplayUnit] = useState<DisplayUnit>(defaultAppPreferences.displayUnit);
   const [tracks, setTracks] = useState<TrackInfo[]>(demoTracks);
   const [selectedIds, setSelectedIds] = useState<string[]>(demoTracks[0] ? [demoTracks[0].id] : []);
   const [activeTrackId, setActiveTrackId] = useState<string | null>(demoTracks[0]?.id ?? null);
-  const [settings, setSettings] = useState(defaultSettings);
-  const [savedCustomSettings, setSavedCustomSettings] = useState<DetectionSettings | null>(() => readSavedCustomPreset());
-  const [detectionPreset, setDetectionPreset] = useState<DetectionPreset>("normal");
+  const [settings, setSettings] = useState(defaultAppPreferences.detectionSettings);
+  const [savedCustomSettings, setSavedCustomSettings] = useState<DetectionSettings | null>(defaultAppPreferences.customDetectionSettings);
+  const [detectionPreset, setDetectionPreset] = useState<DetectionPreset>(defaultAppPreferences.detectionPreset);
   const [saveOptions, setSaveOptions] = useState<SaveOptions>(defaultSaveOptions);
+  const [preferencesLoaded, setPreferencesLoaded] = useState(false);
   const [saveSettingsOpen, setSaveSettingsOpen] = useState(false);
   const [saveConfirmIds, setSaveConfirmIds] = useState<string[] | null>(null);
   const [saveDialog, setSaveDialog] = useState<SaveResult[] | null>(null);
@@ -536,6 +523,42 @@ export default function App(): React.ReactElement {
   const isDetecting = detectionProgress !== null;
   const isImporting = importProgress !== null;
   const saveOptionsInvalid = hasInvalidFilenameSuffix(saveOptions.filenameSuffix);
+
+  useEffect(() => {
+    let canceled = false;
+    void window.autoLooper.getPreferences()
+      .then((preferences) => {
+        if (canceled) return;
+        const legacyCustomSettings = preferences.customDetectionSettings ?? readSavedCustomPreset();
+        setLanguage(preferences.language);
+        setDisplayUnit(preferences.displayUnit);
+        setSettings(preferences.detectionSettings);
+        setSavedCustomSettings(legacyCustomSettings);
+        setDetectionPreset(preferences.detectionPreset);
+        setSaveOptions(preferences.saveOptions);
+        setStatus(ui(preferences.language, "ready"));
+      })
+      .catch(() => undefined)
+      .finally(() => {
+        if (!canceled) setPreferencesLoaded(true);
+      });
+    return () => {
+      canceled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!preferencesLoaded) return;
+    const preferences: AppPreferences = {
+      language,
+      displayUnit,
+      detectionPreset,
+      detectionSettings: settings,
+      customDetectionSettings: savedCustomSettings,
+      saveOptions
+    };
+    void window.autoLooper.savePreferences(preferences).catch(() => undefined);
+  }, [preferencesLoaded, language, displayUnit, detectionPreset, settings, savedCustomSettings, saveOptions]);
 
   useEffect(() => {
     tracksRef.current = tracks;
@@ -807,7 +830,6 @@ export default function App(): React.ReactElement {
 
   function saveCustomPreset(): void {
     const next = { ...settings };
-    window.localStorage.setItem(customPresetStorageKey, JSON.stringify(next));
     setSavedCustomSettings(next);
     setDetectionPreset("custom");
     setStatus(ui(language, "customPresetSaved"));
